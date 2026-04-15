@@ -916,46 +916,29 @@ function buildPrintHTML(
   trimSize = '6x9'
 ): string {
   const pageSize = TRIM_SIZE_CSS[trimSize] ?? '6in 9in';
-  const pageContents = pages.map((p) => p.content).join('\n<div class="page-break"></div>\n');
 
-  // ── Build front matter HTML
-  const year = new Date().getFullYear();
+  // Compute pixel dimensions matching generatePdfBlob's container (pt × 96/72)
+  const TRIM_PT: Record<string, [number, number]> = {
+    '5x8':     [360, 576],
+    '5.5x8.5': [396, 612],
+    '6x9':     [432, 648],
+    'digest':  [364.3, 562.3],
+    'mass':    [306, 494.6],
+    'a5':      [419.5, 595.3],
+    '7x10':    [504, 720],
+    '8.5x11':  [612, 792],
+  };
+  const [ptW, ptH] = TRIM_PT[trimSize] ?? [432, 648];
+  const pxW = Math.round(ptW * 96 / 72);
+  const pxH = Math.round(ptH * 96 / 72);
 
-  const titlePageHtml = `
-<div class="front-page title-page">
-  <div class="title-page-inner">
-    <div class="fp-title">${escapeHtml(bookData.title)}</div>
-    ${bookData.subtitle ? `<div class="fp-subtitle">${escapeHtml(bookData.subtitle)}</div>` : ''}
-    <div class="fp-author">${escapeHtml(bookData.author || '')}</div>
-  </div>
-</div>`;
-
-  const copyrightPageHtml = `
-<div class="page-break"></div>
-<div class="front-page copyright-page">
-  <div class="copyright-inner">
-    <p>Copyright © ${year} ${escapeHtml(bookData.author || 'the Author')}</p>
-    <p>All rights reserved. No part of this publication may be reproduced, distributed, or transmitted in any form or by any means without the prior written permission of the publisher.</p>
-    <p style="margin-top:1em">Formatted with <em>Booksane</em>.</p>
-  </div>
-</div>`;
-
-  const dedicationHtml = bookData.dedication ? `
-<div class="page-break"></div>
-<div class="front-page dedication-page">
-  <div class="dedication-inner">
-    <p class="dedication-text">${escapeHtml(bookData.dedication)}</p>
-  </div>
-</div>` : '';
-
-  const epigraphHtml = bookData.epigraph ? `
-<div class="page-break"></div>
-<div class="front-page epigraph-page">
-  <div class="epigraph-inner">
-    <p class="epigraph-quote">"${escapeHtml(bookData.epigraph)}"</p>
-    ${bookData.epigraphAttribution ? `<p class="epigraph-attr">— ${escapeHtml(bookData.epigraphAttribution)}</p>` : ''}
-  </div>
-</div>` : '';
+  // Wrap every paginator page in a sized .book-page so generatePdfBlob
+  // finds them all via querySelectorAll('.book-page').
+  // Each page already contains running headers, page numbers, and correct
+  // first-paragraph indent from wrapInPage() / wrapParagraph() in paginator.ts.
+  const pageContents = pages
+    .map((p) => `<div class="book-page" style="width:${pxW}px;height:${pxH}px;overflow:hidden;position:relative;background:${template.paperColor || '#fff'};">${p.content}</div>`)
+    .join('\n');
 
   return `<!DOCTYPE html>
 <html>
@@ -964,129 +947,14 @@ function buildPrintHTML(
 <title>${escapeHtml(bookData.title)}</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400;0,600;1,400&family=Merriweather:ital,wght@0,300;0,400;1,300&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;600;700&display=swap');
-
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  @page {
-    size: ${pageSize};
-    margin: ${template.pageMarginV} ${template.pageMarginH};
-  }
-
-  html, body {
-    font-family: ${template.bodyFont};
-    font-size: ${template.bodySize};
-    line-height: ${template.lineHeight};
-    color: ${template.inkColor};
-    background: ${template.paperColor};
-  }
-
-  /* ── Front matter pages ── */
-  .front-page {
-    page-break-before: always;
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: ${template.pageMarginV} ${template.pageMarginH};
-  }
-  .front-page:first-child { page-break-before: avoid; }
-
-  .title-page .title-page-inner { text-align: center; }
-  .fp-title {
-    font-family: ${template.headingFont};
-    font-size: 2.6em;
-    font-weight: ${template.headingWeight};
-    color: ${template.headingColor};
-    line-height: 1.2;
-    margin-bottom: 0.4em;
-    text-transform: ${template.headingTransform};
-  }
-  .fp-subtitle {
-    font-family: ${template.headingFont};
-    font-size: 1.2em;
-    color: ${template.accentColor};
-    font-style: italic;
-    margin-bottom: 2em;
-  }
-  .fp-author {
-    font-family: ${template.bodyFont};
-    font-size: 1.1em;
-    color: ${template.inkColor};
-    margin-top: 3em;
-  }
-
-  .copyright-page { align-items: flex-end; }
-  .copyright-inner {
-    font-size: 0.72em;
-    color: ${template.inkColor};
-    opacity: 0.7;
-    line-height: 1.7;
-    max-width: 36em;
-  }
-  .copyright-inner p { margin-bottom: 0.5em; }
-
-  .dedication-page .dedication-inner { text-align: center; max-width: 28em; }
-  .dedication-text { font-style: italic; font-size: 1.05em; line-height: 1.9; color: ${template.inkColor}; }
-
-  .epigraph-page .epigraph-inner { max-width: 28em; }
-  .epigraph-quote { font-style: italic; font-size: 1em; line-height: 1.9; color: ${template.inkColor}; margin-bottom: 0.5em; }
-  .epigraph-attr { font-size: 0.85em; color: ${template.accentColor}; text-align: right; }
-
-  /* ── Body pages ── */
-  .book-page {
-    background: ${template.paperColor};
-    padding: ${template.pageMarginV} ${template.pageMarginH};
-    position: relative;
-  }
-
-  .page-break { page-break-before: always; }
-
-  p {
-    margin: 0;
-    text-indent: ${template.paragraphStyle === 'indent' ? template.textIndent : '0'};
-    margin-bottom: ${template.paragraphStyle === 'spaced' ? template.paragraphSpacing : '0'};
-  }
-
-  .chapter-start { padding-top: ${template.chapterStartMargin}; }
-
-  .chapter-number {
-    display: block;
-    font-family: ${template.headingFont};
-    font-weight: ${template.headingWeight};
-    text-align: ${template.headingAlign};
-    color: ${template.accentColor};
-    font-size: ${template.chapterNumberSize};
-    margin-bottom: 0.4em;
-  }
-
-  .chapter-heading {
-    font-family: ${template.headingFont};
-    font-size: ${template.headingSize};
-    font-weight: ${template.headingWeight};
-    text-align: ${template.headingAlign};
-    text-transform: ${template.headingTransform};
-    color: ${template.headingColor};
-    margin-bottom: 1.5em;
-  }
-
-  .section-break {
-    text-align: center;
-    color: ${template.accentColor};
-    margin: 1.5em 0;
-    opacity: 0.5;
-  }
-
-  @media print {
-    .watermark { display: none; }
-  }
+  @page { size: ${pageSize}; margin: 0; }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  .book-page { display: block; }
+  @media print { .watermark { display: none; } }
 </style>
 </head>
 <body>
-${titlePageHtml}
-${copyrightPageHtml}
-${dedicationHtml}
-${epigraphHtml}
-<div class="page-break"></div>
 ${pageContents}
 </body>
 </html>`;

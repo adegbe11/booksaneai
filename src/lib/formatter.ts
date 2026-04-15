@@ -167,7 +167,7 @@ function extractFrontMatter(text: string): {
     }
 
     // Dedication
-    if ((title || author) && /^(dedication|to\s+my|for\s+my|dedicated)/i.test(line)) {
+    if ((title || author) && /^(dedication:?|to\s+my|for\s+my|dedicated\s+to|this\s+book\s+is)/i.test(line)) {
       const dedLines: string[] = [line.replace(/^dedication:\s*/i, '')];
       let j = i + 1;
       while (j < lines.length && lines[j].trim() && !isChapterHeading(lines[j])) {
@@ -193,7 +193,7 @@ function extractFrontMatter(text: string): {
   for (let i = 0; i < searchEnd; i++) {
     const line = bodyLines[i].trim();
     if (!line) continue;
-    if (/^["'\u201C\u2018\u2014]/.test(line) && line.length > 15 && line.length < 300) {
+    if ((/^["'\u201C\u2018\u2014\u00AB]/.test(line) || /^[A-Z][^.!?]*[,;—]$/.test(line)) && line.length > 15 && line.length < 300) {
       // Possible epigraph
       epigraph = line.replace(/^["'\u201C\u2018]/, '').replace(/["'\u201D\u2019]$/, '').trim();
       // Check next line for attribution (starts with — or - or "by ")
@@ -279,9 +279,12 @@ const CHAPTER_PATTERNS = [
   /^chapter\s+\d+\b/i,
   /^chapter\s+[ivxlcdm]+\b/i,
   /^chapter\s+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\b/i,
+  /^ch[.\s]\s*\d+\b/i,
+  /^\d+\.\s+\S/,
   /^part\s+\d+\b/i,
   /^part\s+[ivxlcdm]+\b/i,
-  /^(prologue|epilogue|preface|foreword|introduction|afterword|author's note|acknowledgments?|conclusion)$/i,
+  /^part\s+(one|two|three|four|five|six|seven|eight|nine|ten)\b/i,
+  /^(prologue|epilogue|preface|foreword|introduction|afterword|author'?s?\s+note|acknowledgments?|conclusion|interlude|intermission|coda)$/i,
 ];
 
 function isChapterHeading(line: string): boolean {
