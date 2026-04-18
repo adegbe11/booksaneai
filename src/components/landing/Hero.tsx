@@ -5,6 +5,365 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 
+// ─────────────────────────────────────────
+//  TYPING LAPTOP — animated manuscript that types itself
+// ─────────────────────────────────────────
+function TypingLaptop() {
+  const lines = [
+    'Chapter I',
+    'The Storm',
+    '',
+    'The storm had been building',
+    'for three days before it',
+    'finally broke. Mara stood',
+    'at the window of the',
+    'lighthouse, watching the',
+    'gray Atlantic churn beneath',
+    'a bruised sky.',
+  ];
+  const [typed, setTyped] = useState('');
+  const [lineIdx, setLineIdx] = useState(0);
+  const [charIdx, setCharIdx] = useState(0);
+
+  useEffect(() => {
+    if (lineIdx >= lines.length) {
+      const r = setTimeout(() => {
+        setTyped('');
+        setLineIdx(0);
+        setCharIdx(0);
+      }, 2600);
+      return () => clearTimeout(r);
+    }
+    const currentLine = lines[lineIdx];
+    if (charIdx < currentLine.length) {
+      const t = setTimeout(() => {
+        setTyped((s) => s + currentLine[charIdx]);
+        setCharIdx((i) => i + 1);
+      }, 42 + Math.random() * 58);
+      return () => clearTimeout(t);
+    }
+    const next = setTimeout(() => {
+      setTyped((s) => s + '\n');
+      setLineIdx((i) => i + 1);
+      setCharIdx(0);
+    }, 260);
+    return () => clearTimeout(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lineIdx, charIdx]);
+
+  return (
+    <motion.div
+      animate={{ y: [0, -4, 0], rotate: [-2, -1.6, -2] }}
+      transition={{ duration: 5.6, repeat: Infinity, ease: 'easeInOut' }}
+      style={{ position: 'relative', width: 240, height: 170 }}
+    >
+      {/* Screen bezel */}
+      <div style={{
+        position: 'absolute', inset: '0 0 22px 0',
+        background: 'linear-gradient(180deg, #1A1828 0%, #0B0916 100%)',
+        borderRadius: '10px 10px 4px 4px',
+        border: '2px solid #3E3B52',
+        boxShadow: '0 18px 36px rgba(0,0,0,0.55), inset 0 0 0 3px #0A0910',
+        padding: '14px 16px 10px',
+        overflow: 'hidden',
+      }}>
+        {/* Fake menu dots */}
+        <div style={{ position: 'absolute', top: 6, left: 10, display: 'flex', gap: 4 }}>
+          {['#FF5F56', '#FFBD2E', '#27C93F'].map((c) => (
+            <div key={c} style={{ width: 6, height: 6, borderRadius: 999, background: c, opacity: 0.8 }} />
+          ))}
+        </div>
+        {/* Manuscript content */}
+        <pre style={{
+          marginTop: 8,
+          fontFamily: 'var(--font-garamond), Georgia, serif',
+          fontSize: 9,
+          lineHeight: 1.5,
+          color: '#F5F0E8',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          height: '100%',
+          overflow: 'hidden',
+        }}>
+          {typed}
+          <motion.span
+            animate={{ opacity: [1, 0, 1] }}
+            transition={{ duration: 0.9, repeat: Infinity }}
+            style={{
+              display: 'inline-block',
+              width: 5,
+              height: 10,
+              background: '#FFE500',
+              verticalAlign: '-1px',
+              marginLeft: 1,
+            }}
+          />
+        </pre>
+      </div>
+      {/* Laptop base */}
+      <div style={{
+        position: 'absolute', bottom: 0, left: -12, right: -12, height: 22,
+        background: 'linear-gradient(180deg, #2A2740 0%, #15131F 100%)',
+        borderRadius: '4px 4px 16px 16px',
+        border: '2px solid #3E3B52',
+        borderTop: 'none',
+        boxShadow: '0 12px 24px rgba(0,0,0,0.5)',
+      }}>
+        {/* Keyboard slot */}
+        <div style={{
+          position: 'absolute', top: 2, left: '50%', transform: 'translateX(-50%)',
+          width: '22%', height: 3, borderRadius: 2, background: '#4A4760',
+        }} />
+      </div>
+    </motion.div>
+  );
+}
+
+// ─────────────────────────────────────────
+//  E-READER — Kindle-style device on the foreground
+// ─────────────────────────────────────────
+function EReader() {
+  return (
+    <motion.div
+      animate={{ y: [0, -6, 0], rotate: [6, 4, 6] }}
+      transition={{ duration: 6.8, repeat: Infinity, ease: 'easeInOut', delay: 0.8 }}
+      style={{
+        position: 'relative',
+        width: 120,
+        height: 170,
+        background: 'linear-gradient(180deg, #2A2740 0%, #15131F 100%)',
+        border: '2px solid #3E3B52',
+        borderRadius: 14,
+        boxShadow: '0 20px 40px rgba(0,0,0,0.55), 4px 4px 0 rgba(255,255,255,0.05)',
+        padding: 10,
+      }}
+    >
+      {/* Screen */}
+      <div style={{
+        background: '#EDE6D6',
+        borderRadius: 4,
+        width: '100%',
+        height: '88%',
+        padding: '8px 8px 6px',
+        overflow: 'hidden',
+        fontFamily: 'var(--font-garamond), Georgia, serif',
+        color: '#1C1208',
+        position: 'relative',
+      }}>
+        <div style={{ fontSize: 7, color: '#7D6A55', textAlign: 'center', letterSpacing: '0.1em', marginBottom: 2 }}>
+          CHAPTER I
+        </div>
+        <div style={{ fontSize: 9, textAlign: 'center', fontStyle: 'italic', marginBottom: 6 }}>
+          The Storm
+        </div>
+        <div style={{ height: 1, width: 16, margin: '0 auto 6px', background: '#9D8A75' }} />
+        <div style={{ fontSize: 6.5, lineHeight: 1.45, textIndent: '1em' }}>
+          The storm had been building for three days before it finally broke. Mara stood at the window, watching the gray Atlantic churn.
+        </div>
+        {/* Progress line */}
+        <div style={{
+          position: 'absolute', bottom: 6, left: 8, right: 8, height: 1,
+          background: '#C4B9A8',
+        }}>
+          <motion.div
+            animate={{ width: ['14%', '74%', '14%'] }}
+            transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
+            style={{ height: '100%', background: '#7C3AED' }}
+          />
+        </div>
+      </div>
+      {/* Home button */}
+      <div style={{
+        width: 18, height: 4, borderRadius: 2,
+        background: '#4A4760', margin: '4px auto 0',
+      }} />
+    </motion.div>
+  );
+}
+
+// ─────────────────────────────────────────
+//  PRINTER — books & pages print out the top
+// ─────────────────────────────────────────
+function Printer() {
+  return (
+    <motion.div
+      animate={{ y: [0, 2, 0] }}
+      transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
+      style={{ position: 'relative', width: 150, height: 170 }}
+    >
+      {/* Paper sheets shooting up — three staggered */}
+      {[0, 1.5, 3.0].map((delay, i) => (
+        <motion.div
+          key={i}
+          initial={{ y: 30, opacity: 0, rotate: -4 }}
+          animate={{ y: [-10, -80, -80], opacity: [0, 1, 0], rotate: [-4, 6, 10] }}
+          transition={{ duration: 3.5, repeat: Infinity, delay, ease: 'easeOut' }}
+          style={{
+            position: 'absolute',
+            bottom: 100,
+            left: `${24 + i * 12}px`,
+            width: 60,
+            height: 78,
+            background: '#FAF5ED',
+            border: '1px solid rgba(0,0,0,0.2)',
+            boxShadow: '3px 3px 0 rgba(0,0,0,0.1)',
+            padding: '6px 5px',
+          }}
+        >
+          {/* Faux lines on the page */}
+          {[80, 95, 70, 88, 92, 60].map((w, j) => (
+            <div key={j} style={{
+              height: 1.5,
+              width: `${w}%`,
+              background: 'rgba(28,18,8,0.35)',
+              marginBottom: 3,
+            }} />
+          ))}
+        </motion.div>
+      ))}
+
+      {/* Printer body */}
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0, height: 110,
+        background: 'linear-gradient(180deg, #FFE500 0%, #F5C71E 100%)',
+        border: '3px solid #000',
+        borderRadius: 6,
+        boxShadow: '6px 6px 0 #000',
+      }}>
+        {/* Paper tray slot */}
+        <div style={{
+          position: 'absolute', top: -4, left: '18%', right: '18%', height: 6,
+          background: '#000',
+          borderRadius: 2,
+        }} />
+        {/* Display */}
+        <div style={{
+          position: 'absolute', top: 14, left: 12, right: 12, height: 22,
+          background: '#1A1828',
+          borderRadius: 3,
+          display: 'flex', alignItems: 'center', padding: '0 8px',
+          fontFamily: 'var(--font-body)', fontSize: 7, letterSpacing: '0.1em',
+          color: '#4ADE80', fontWeight: 800,
+        }}>
+          <motion.span
+            animate={{ opacity: [1, 0.3, 1] }}
+            transition={{ duration: 1.4, repeat: Infinity }}
+          >
+            \u2022 PRINTING
+          </motion.span>
+          <div style={{ flex: 1 }} />
+          <span style={{ color: '#FFE500' }}>BOOKSANE</span>
+        </div>
+        {/* Progress bar */}
+        <div style={{
+          position: 'absolute', top: 44, left: 12, right: 12, height: 8,
+          background: '#000', borderRadius: 2, overflow: 'hidden',
+        }}>
+          <motion.div
+            animate={{ width: ['0%', '100%', '0%'] }}
+            transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
+            style={{ height: '100%', background: '#FF2D78' }}
+          />
+        </div>
+        {/* Buttons */}
+        <div style={{
+          position: 'absolute', top: 62, left: 12, right: 12, display: 'flex', gap: 6,
+        }}>
+          {['#FF5F56', '#27C93F', '#3B82F6'].map((c, i) => (
+            <div key={i} style={{
+              width: 10, height: 10, borderRadius: 999,
+              background: c, border: '2px solid #000',
+            }} />
+          ))}
+        </div>
+        {/* Output tray */}
+        <div style={{
+          position: 'absolute', bottom: -8, left: '10%', right: '10%', height: 10,
+          background: '#F5C71E',
+          border: '2px solid #000',
+          borderRadius: '0 0 8px 8px',
+          boxShadow: '3px 3px 0 #000',
+        }} />
+      </div>
+    </motion.div>
+  );
+}
+
+// ─────────────────────────────────────────
+//  FLOATING BOOK STACK — small decorative pile
+// ─────────────────────────────────────────
+function FloatingBooks() {
+  return (
+    <motion.div
+      animate={{ y: [0, -5, 0], rotate: [-4, -6, -4] }}
+      transition={{ duration: 5.2, repeat: Infinity, ease: 'easeInOut', delay: 1.4 }}
+      style={{ position: 'relative', width: 110, height: 90 }}
+    >
+      {[
+        { y: 40, w: 96, h: 16, bg: '#7C3AED', shift: 0, text: 'MEMOIR' },
+        { y: 22, w: 104, h: 18, bg: '#FFE500', shift: 6, text: 'NOVEL' },
+        { y: 2,  w: 98,  h: 20, bg: '#FF2D78', shift: -4, text: 'POETRY' },
+      ].map((b, i) => (
+        <motion.div
+          key={i}
+          animate={{ x: [0, b.shift * 0.4, 0] }}
+          transition={{ duration: 6 + i, repeat: Infinity, ease: 'easeInOut' }}
+          style={{
+            position: 'absolute',
+            left: `calc(50% - ${b.w / 2}px + ${b.shift}px)`,
+            top: b.y,
+            width: b.w,
+            height: b.h,
+            background: b.bg,
+            border: '2px solid #000',
+            boxShadow: '3px 3px 0 #000',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 7,
+            fontWeight: 900,
+            letterSpacing: '0.15em',
+            color: b.bg === '#FFE500' ? '#000' : '#FFF',
+          }}
+        >
+          {b.text}
+        </motion.div>
+      ))}
+    </motion.div>
+  );
+}
+
+// ─────────────────────────────────────────
+//  SPARKLES — drifting twinkles around the scene
+// ─────────────────────────────────────────
+function Sparkles() {
+  const dots = [
+    { x: '8%',  y: '16%', d: 0,   s: 4, c: '#FFE500' },
+    { x: '92%', y: '22%', d: 1.2, s: 3, c: '#FFFFFF' },
+    { x: '14%', y: '78%', d: 2.0, s: 3, c: '#7C3AED' },
+    { x: '88%', y: '82%', d: 0.6, s: 4, c: '#FF2D78' },
+    { x: '50%', y: '8%',  d: 1.6, s: 2, c: '#FFFFFF' },
+    { x: '70%', y: '60%', d: 2.4, s: 3, c: '#FFE500' },
+  ];
+  return (
+    <>
+      {dots.map((d, i) => (
+        <motion.div
+          key={i}
+          animate={{ opacity: [0.2, 1, 0.2], scale: [0.6, 1.2, 0.6] }}
+          transition={{ duration: 2.8, repeat: Infinity, delay: d.d, ease: 'easeInOut' }}
+          style={{
+            position: 'absolute', left: d.x, top: d.y,
+            width: d.s, height: d.s, borderRadius: 999, background: d.c,
+            boxShadow: `0 0 ${d.s * 2}px ${d.c}`,
+            pointerEvents: 'none',
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
 function BookMockup() {
   const [page, setPage] = useState(0);
   const pages = [
@@ -243,17 +602,71 @@ export default function Hero() {
             </motion.div>
           </div>
 
-          {/* Right: Book mockup */}
+          {/* Right: Animated scene — laptop typing + book spread + e-reader + printer */}
           <motion.div
             initial={{ opacity: 0, x: 40, scale: 0.92 }} animate={{ opacity: 1, x: 0, scale: 1 }}
             transition={{ duration: 0.8, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            className="flex justify-center lg:justify-end relative"
+            className="relative"
+            style={{ minHeight: '560px', width: '100%' }}
           >
             {/* Glow */}
-            <div className="absolute inset-0 -z-10 blur-3xl opacity-30 rounded-full"
-              style={{ background: 'radial-gradient(ellipse, rgba(255,229,0,0.4) 0%, transparent 70%)' }}
+            <div className="absolute inset-0 -z-10 blur-3xl opacity-40 rounded-full"
+              style={{ background: 'radial-gradient(ellipse, rgba(255,229,0,0.35) 0%, transparent 70%)' }}
             />
-            <BookMockup />
+
+            <Sparkles />
+
+            {/* Laptop — back-left, peeking behind the book */}
+            <div style={{
+              position: 'absolute',
+              top: '6%',
+              left: '-2%',
+              zIndex: 1,
+            }}>
+              <TypingLaptop />
+            </div>
+
+            {/* Printer — back-right */}
+            <div style={{
+              position: 'absolute',
+              top: '2%',
+              right: '2%',
+              zIndex: 1,
+            }}>
+              <Printer />
+            </div>
+
+            {/* Book spread — centerpiece */}
+            <div style={{
+              position: 'absolute',
+              top: '32%',
+              left: '50%',
+              transform: 'translate(-50%, -12%)',
+              zIndex: 2,
+            }}>
+              <BookMockup />
+            </div>
+
+            {/* E-Reader — foreground right */}
+            <div style={{
+              position: 'absolute',
+              bottom: '2%',
+              right: '10%',
+              zIndex: 3,
+              filter: 'drop-shadow(0 16px 20px rgba(0,0,0,0.45))',
+            }}>
+              <EReader />
+            </div>
+
+            {/* Floating book stack — foreground left */}
+            <div style={{
+              position: 'absolute',
+              bottom: '4%',
+              left: '6%',
+              zIndex: 3,
+            }}>
+              <FloatingBooks />
+            </div>
           </motion.div>
         </div>
       </div>
