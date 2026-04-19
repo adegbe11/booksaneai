@@ -182,99 +182,148 @@ function buildFrontCover(
 
 // ─────────────────────────────────────────
 //  HALF-TITLE PAGE
-//  Traditional: just the title, nothing else.
-//  Simple. Elegant. This is what publishers do.
+//  Traditional: title only, positioned in
+//  the upper-center third of the page.
+//  Nothing else on this page — ever.
 // ─────────────────────────────────────────
 
 export function buildHalfTitlePage(bookData: BookData, template: Template): string {
   return `
     <div style="
-      display:flex;flex-direction:column;align-items:center;justify-content:center;
       height:100%;padding:${PREVIEW_PAD_V} ${PREVIEW_PAD_H};
       background:${template.paperColor};
       box-sizing:border-box;overflow:hidden;
+      display:flex;flex-direction:column;align-items:center;
     ">
+      <div style="flex:0.55;"></div>
       <div style="
-        font-family:${template.headingFont};font-size:10pt;
+        font-family:${template.headingFont};
+        font-size:11pt;
         font-weight:${template.headingWeight};
         color:${template.headingColor};
-        text-align:center;line-height:1.2;
+        text-align:center;
+        line-height:1.2;
         text-transform:${template.headingTransform};
-        letter-spacing:${template.headingTransform === 'uppercase' ? '0.08em' : '0'};
+        letter-spacing:${template.headingTransform === 'uppercase' ? '0.1em' : '0.02em'};
       ">
         ${esc(bookData.title)}
       </div>
+      <div style="flex:1;"></div>
     </div>
   `;
 }
 
 // ─────────────────────────────────────────
 //  FULL TITLE PAGE
-//  Title (large) / subtitle / thin rule /
-//  author name / publisher mark at foot.
+//  Professional publisher standard:
+//  Large bold title (top half) /
+//  subtitle flanked by thin rules /
+//  generous white space /
+//  author name prominent (lower section) /
+//  publisher imprint small at foot.
 // ─────────────────────────────────────────
 
 export function buildFullTitlePage(bookData: BookData, template: Template): string {
+  // Subtitle: each word stacked on its own line (HP-style "THE / COMPLETE / COLLECTION")
+  const subtitleLines = bookData.subtitle
+    ? bookData.subtitle.split(/\s+/).map(w => esc(w)).join('<br/>')
+    : '';
+
+  // Author in spaced uppercase for title-page gravitas
+  const authorDisplay = (bookData.author || '').toUpperCase();
+
   return `
     <div style="
-      display:flex;flex-direction:column;align-items:center;justify-content:center;
       height:100%;padding:${PREVIEW_PAD_V} ${PREVIEW_PAD_H};
       background:${template.paperColor};
-      box-sizing:border-box;overflow:hidden;text-align:center;position:relative;
+      box-sizing:border-box;overflow:hidden;
+      display:flex;flex-direction:column;align-items:center;
+      text-align:center;
     ">
-      <!-- Title -->
+
+      <!-- Top spacer — title sits about 15% from top -->
+      <div style="flex:0.25;min-height:8px;"></div>
+
+      <!-- TITLE — large, dominant, bold -->
       <div style="
         font-family:${template.headingFont};
-        font-size:${template.headingAlign === 'left' ? '12pt' : '11pt'};
-        font-weight:${template.headingWeight};
+        font-size:20pt;
+        font-weight:900;
         color:${template.headingColor};
-        text-transform:${template.headingTransform};
-        letter-spacing:${template.headingTransform === 'uppercase' ? '0.06em' : '0'};
-        line-height:1.15;
-        margin-bottom:${bookData.subtitle ? '0.4em' : '1em'};
-        text-align:${template.headingAlign};
+        line-height:1.0;
+        letter-spacing:${template.headingTransform === 'uppercase' ? '0.04em' : '-0.01em'};
+        text-transform:${template.headingTransform === 'none' ? 'uppercase' : template.headingTransform};
+        text-align:center;
+        word-break:break-word;
       ">
         ${esc(bookData.title)}
       </div>
 
-      <!-- Subtitle -->
+      <!-- SUBTITLE flanked by thin rules -->
       ${bookData.subtitle ? `
       <div style="
-        font-family:${template.bodyFont};font-size:7.5pt;
-        color:${template.inkColor};opacity:0.65;
-        margin-bottom:1.2em;font-style:italic;
-        text-align:${template.headingAlign};
+        display:flex;align-items:center;justify-content:center;
+        gap:8px;margin-top:0.55em;width:100%;
       ">
-        ${esc(bookData.subtitle)}
+        <div style="flex:1;height:0.5px;background:${template.headingColor};opacity:0.35;max-width:36px;"></div>
+        <div style="
+          font-family:${template.headingFont};
+          font-size:6.5pt;
+          font-weight:${template.headingWeight};
+          letter-spacing:0.22em;
+          text-transform:uppercase;
+          color:${template.headingColor};
+          opacity:0.75;
+          line-height:1.6;
+          text-align:center;
+        ">
+          ${subtitleLines}
+        </div>
+        <div style="flex:1;height:0.5px;background:${template.headingColor};opacity:0.35;max-width:36px;"></div>
       </div>` : ''}
 
-      <!-- Accent rule -->
-      <div style="
-        width:28px;height:1px;
-        background:${template.accentColor};opacity:0.5;
-        margin:0.4em ${template.headingAlign === 'left' ? '0' : 'auto'} 0.8em;
-      "></div>
+      <!-- Middle spacer — the generous white space that marks quality typography -->
+      <div style="flex:1;min-height:20px;"></div>
 
-      <!-- Author -->
+      <!-- AUTHOR NAME — prominent, letter-spaced, not italic -->
       <div style="
-        font-family:${template.bodyFont};font-size:7.5pt;
-        color:${template.inkColor};opacity:0.72;
-        font-style:italic;
-        text-align:${template.headingAlign};
-      ">
-        ${esc(bookData.author || '')}
-      </div>
-
-      <!-- Publisher mark at foot -->
-      <div style="
-        position:absolute;bottom:12px;left:0;right:0;
+        font-family:${template.bodyFont};
+        font-size:10pt;
+        font-weight:400;
+        color:${template.inkColor};
+        letter-spacing:0.12em;
         text-align:center;
-        font-family:${template.headingFont};font-size:6pt;
-        color:${template.inkColor};opacity:0.22;
-        letter-spacing:0.15em;text-transform:uppercase;
+        opacity:0.88;
       ">
-        Booksane
+        ${esc(authorDisplay)}
       </div>
+
+      <!-- Bottom spacer before publisher mark -->
+      <div style="flex:0.3;min-height:10px;"></div>
+
+      <!-- PUBLISHER MARK — small at foot -->
+      <div style="
+        text-align:center;
+        display:flex;flex-direction:column;align-items:center;gap:2px;
+      ">
+        <div style="
+          font-family:${template.headingFont};
+          font-size:7pt;
+          font-weight:600;
+          color:${template.inkColor};
+          opacity:0.28;
+          letter-spacing:0.18em;
+          text-transform:uppercase;
+        ">Booksane</div>
+        <div style="
+          font-family:${template.bodyFont};
+          font-size:5.5pt;
+          color:${template.inkColor};
+          opacity:0.18;
+          letter-spacing:0.06em;
+        ">booksane.com</div>
+      </div>
+
     </div>
   `;
 }

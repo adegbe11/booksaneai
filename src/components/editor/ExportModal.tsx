@@ -1130,41 +1130,110 @@ function buildPrintHTML(
 
   const yr = new Date().getFullYear();
 
+  // ── typography metrics for front matter pages ──────────────────────
+  const titleLargePx  = Math.round(54  * 96 / 72); // ~72px — dominant title
+  const halfTitlePx   = Math.round(22  * 96 / 72); // ~29px — half-title
+  const subtitleLPx   = Math.round(10  * 96 / 72); // ~13px — subtitle label
+  const authorTitlePx = Math.round(16  * 96 / 72); // ~21px — author on title page
+
   // ---- Half-title page (recto, page 1) ──────────────────────────────
+  // Traditional: just the book title, positioned in the upper-middle third.
   if (pageNum % 2 === 0) addBlank();
-  addPage(
-    '<div style="display:flex;flex-direction:column;align-items:center;'
-    + 'justify-content:center;height:100%;text-align:center;">'
-    + '<div style="font-family:' + template.headingFont + ';'
-    + 'font-size:' + Math.round(bodyPx * 1.25) + 'px;'
-    + 'font-weight:' + template.headingWeight + ';color:' + template.inkColor + ';'
-    + 'text-transform:' + template.headingTransform + ';letter-spacing:0.04em;">'
-    + escapeHtml(bookData.title) + '</div></div>',
-    { suppressHead: true }
-  );
+  {
+    const htTop = Math.round(contentH * 0.28); // ~28% down from content top
+    addPage(
+      '<div style="padding-top:' + htTop + 'px;text-align:center;">'
+      + '<div style="font-family:' + template.headingFont + ';'
+      + 'font-size:' + halfTitlePx + 'px;'
+      + 'font-weight:' + template.headingWeight + ';'
+      + 'color:' + template.headingColor + ';'
+      + 'line-height:1.15;'
+      + 'text-transform:' + template.headingTransform + ';'
+      + 'letter-spacing:0.03em;">'
+      + escapeHtml(bookData.title) + '</div>'
+      + '</div>',
+      { suppressHead: true }
+    );
+  }
 
   // ---- Title page (recto, page 3) ────────────────────────────────────
+  // Professional standard: large title / flanked-rule subtitle /
+  // generous white space / author prominent / publisher at foot.
   ensureRecto();
-  addPage(
-    '<div style="display:flex;flex-direction:column;align-items:center;'
-    + 'justify-content:center;height:100%;text-align:center;">'
-    + '<div style="font-family:' + template.headingFont + ';'
-    + 'font-size:' + Math.round(headPx * 1.45) + 'px;'
-    + 'font-weight:' + template.headingWeight + ';color:' + template.headingColor + ';'
-    + 'line-height:1.2;margin-bottom:0.25em;text-transform:' + template.headingTransform + ';">'
-    + escapeHtml(bookData.title) + '</div>'
-    + (bookData.subtitle
-        ? '<div style="font-family:' + template.headingFont + ';'
-          + 'font-size:' + Math.round(bodyPx * 1.1) + 'px;font-style:italic;'
-          + 'color:' + template.accentColor + ';margin-bottom:1.8em;">'
-          + escapeHtml(bookData.subtitle) + '</div>'
+  {
+    const subLines = bookData.subtitle
+      ? bookData.subtitle.split(/\s+/).map(w => escapeHtml(w)).join('<br/>')
+      : '';
+    const authorUC = (bookData.author || '').toUpperCase();
+    const ruleW    = Math.round(contentW * 0.10); // short flanking rule
+    const topGap   = Math.round(contentH * 0.12); // ~12% top breathing room
+
+    addPage(
+      // Outer flex column
+      '<div style="display:flex;flex-direction:column;align-items:center;'
+      + 'height:100%;text-align:center;">'
+
+      // Top spacer
+      + '<div style="flex:0.22;min-height:' + topGap + 'px;"></div>'
+
+      // TITLE — large, dominant
+      + '<div style="font-family:' + template.headingFont + ';'
+      + 'font-size:' + titleLargePx + 'px;'
+      + 'font-weight:900;'
+      + 'color:' + template.headingColor + ';'
+      + 'line-height:0.98;'
+      + 'letter-spacing:-0.01em;'
+      + 'text-transform:' + (template.headingTransform === 'none' ? 'uppercase' : template.headingTransform) + ';'
+      + 'word-break:break-word;">'
+      + escapeHtml(bookData.title) + '</div>'
+
+      // SUBTITLE — flanked by thin rules (only if present)
+      + (bookData.subtitle
+        ? '<div style="display:flex;align-items:center;justify-content:center;'
+          + 'gap:' + Math.round(bodyPx * 0.6) + 'px;'
+          + 'margin-top:' + Math.round(bodyPx * 0.6) + 'px;width:100%;">'
+          + '<div style="width:' + ruleW + 'px;height:1px;background:' + template.headingColor + ';opacity:0.35;"></div>'
+          + '<div style="font-family:' + template.headingFont + ';'
+          + 'font-size:' + subtitleLPx + 'px;'
+          + 'font-weight:' + template.headingWeight + ';'
+          + 'letter-spacing:0.22em;text-transform:uppercase;'
+          + 'color:' + template.headingColor + ';opacity:0.72;line-height:1.65;">'
+          + subLines + '</div>'
+          + '<div style="width:' + ruleW + 'px;height:1px;background:' + template.headingColor + ';opacity:0.35;"></div>'
+          + '</div>'
         : '')
-    + '<div style="font-family:' + template.bodyFont + ';'
-    + 'font-size:' + Math.round(bodyPx * 1.05) + 'px;'
-    + 'color:' + template.inkColor + ';margin-top:2.5em;">'
-    + escapeHtml(bookData.author || '') + '</div></div>',
-    { suppressHead: true }
-  );
+
+      // Middle spacer — the generous white space that marks quality typography
+      + '<div style="flex:1;min-height:' + Math.round(contentH * 0.2) + 'px;"></div>'
+
+      // AUTHOR — prominent, letter-spaced, not italic
+      + '<div style="font-family:' + template.bodyFont + ';'
+      + 'font-size:' + authorTitlePx + 'px;'
+      + 'font-weight:400;'
+      + 'color:' + template.inkColor + ';'
+      + 'letter-spacing:0.12em;opacity:0.9;">'
+      + escapeHtml(authorUC) + '</div>'
+
+      // Bottom spacer before publisher
+      + '<div style="flex:0.28;min-height:' + Math.round(contentH * 0.06) + 'px;"></div>'
+
+      // PUBLISHER MARK — small, at foot
+      + '<div style="text-align:center;">'
+      + '<div style="font-family:' + template.headingFont + ';'
+      + 'font-size:' + Math.round(bodyPx * 0.72) + 'px;'
+      + 'color:' + template.inkColor + ';opacity:0.25;'
+      + 'letter-spacing:0.2em;text-transform:uppercase;">'
+      + 'Booksane</div>'
+      + '<div style="font-family:' + template.bodyFont + ';'
+      + 'font-size:' + Math.round(bodyPx * 0.62) + 'px;'
+      + 'color:' + template.inkColor + ';opacity:0.15;letter-spacing:0.06em;">'
+      + 'booksane.com</div>'
+      + '</div>'
+
+      + '</div>',
+      { suppressHead: true }
+    );
+  }
 
   // ---- Copyright page (verso, page 4) ────────────────────────────────
   addPage(
