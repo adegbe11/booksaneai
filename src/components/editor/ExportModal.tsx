@@ -1140,7 +1140,7 @@ function buildPrintHTML(
       + (bookData.epigraphAttribution
           ? '<p style="font-size:' + Math.round(bodyPx * 0.85) + 'px;'
             + 'color:' + template.accentColor + ';text-align:right;">'
-            + '&mdash; ' + escapeHtml(bookData.epigraphAttribution) + '</p>'
+            + '\u2014 ' + escapeHtml(bookData.epigraphAttribution) + '</p>'
           : '')
       + '</div>',
       { suppressHead: true }
@@ -1304,6 +1304,51 @@ function buildPrintHTML(
     // Last (or only) page of chapter
     if (pageContent) {
       addPage(pageContent, { isChapterStart: isChapterPage, chapterTitle: chTitle });
+    }
+  }
+
+  // ---- Back matter ──────────────────────────────────────────────────
+  const addBackSection = (heading: string, html: string) => {
+    ensureRecto();
+    const blocks = parseBlocks(html);
+    const headerDropPx = Math.round(contentH * 0.18);
+    let bContent =
+      '<div style="padding-top:' + headerDropPx + 'px;'
+      + 'text-align:' + template.headingAlign + ';margin-bottom:' + Math.round(headPx * 1.2) + 'px;">'
+      + '<div style="font-family:' + template.headingFont + ';font-size:' + headPx + 'px;'
+      + 'font-weight:' + template.headingWeight + ';color:' + template.headingColor + ';'
+      + 'text-transform:' + template.headingTransform + ';line-height:1.2;">'
+      + escapeHtml(heading) + '</div></div>';
+    let bLines = Math.round(headerDropPx / (bodyPx * lineH)) + 3;
+    let bmFirst = true;
+    for (const block of blocks) {
+      const plain = block.inner.replace(/<[^>]*>/g, '').trim();
+      if (!plain) continue;
+      const cost = Math.max(1, Math.ceil(plain.length / charsPerLine));
+      if (bLines + cost > linesPerPage) {
+        addPage(bContent, { chapterTitle: heading });
+        bContent = ''; bLines = 0;
+      }
+      const mb = template.paragraphStyle === 'spaced' ? Math.round(bodyPx * 0.65) + 'px' : '0';
+      const ind = template.paragraphStyle === 'indent' && !bmFirst ? Math.round(bodyPx * 1.8) + 'px' : '0';
+      bContent +=
+        '<p style="margin:0 0 ' + mb + ';padding:0;text-indent:' + ind + ';'
+        + 'font-family:' + template.bodyFont + ';font-size:' + bodyPx + 'px;'
+        + 'line-height:' + lineH + ';color:' + template.inkColor + ';">'
+        + block.inner + '</p>';
+      bLines += cost;
+      bmFirst = false;
+    }
+    if (bContent) addPage(bContent, { chapterTitle: heading });
+  };
+
+  if (bookData.acknowledgments) addBackSection('Acknowledgments', bookData.acknowledgments);
+  if (bookData.aboutAuthor)     addBackSection('About the Author', bookData.aboutAuthor);
+  if (bookData.extras) {
+    for (const [key, value] of Object.entries(bookData.extras)) {
+      if (!value) continue;
+      const label = key.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+      addBackSection(label, value);
     }
   }
 
