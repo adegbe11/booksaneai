@@ -219,12 +219,41 @@ ${dropCapCss}
 `;
 }
 
+// Converts raw Tiptap HTML to valid XHTML for EPUB:
+// - Self-closes void elements (<br>, <hr>)
+// - Replaces named HTML entities that are invalid in XML with their Unicode equivalents
+function sanitizeXhtml(html: string): string {
+  return html
+    .replace(/<br\s*>/gi, '<br/>')
+    .replace(/<hr\s*>/gi, '<hr/>')
+    .replace(/&nbsp;/g,  '\u00a0')
+    .replace(/&mdash;/g, '\u2014')
+    .replace(/&ndash;/g, '\u2013')
+    .replace(/&ldquo;/g, '\u201C')
+    .replace(/&rdquo;/g, '\u201D')
+    .replace(/&lsquo;/g, '\u2018')
+    .replace(/&rsquo;/g, '\u2019')
+    .replace(/&hellip;/g, '\u2026')
+    .replace(/&trade;/g,  '\u2122')
+    .replace(/&copy;/g,   '\u00A9')
+    .replace(/&reg;/g,    '\u00AE');
+}
+
 function applyDropCap(content: string, template: Template): string {
   if (!template.dropCap) return content;
-  // Add drop-cap class to the first <p> that has actual text content
-  return content.replace(/<p([^>]*)>/, (match, attrs) => {
+  // Find the FIRST <p> that contains actual visible text (skip empty and section-break paragraphs)
+  let found = false;
+  return content.replace(/<p([^>]*)>([\s\S]*?)<\/p>/gi, (match, attrs, inner) => {
+    if (found) return match;
     if (/class="section-break"/.test(attrs)) return match;
-    return `<p${attrs} class="drop-cap">`;
+    const plainText = inner.replace(/<[^>]*>/g, '').trim();
+    if (!plainText) return match;  // skip empty paragraphs
+    found = true;
+    const existingClass = /class="([^"]*)"/.exec(attrs);
+    if (existingClass) {
+      return match.replace(/class="([^"]*)"/, `class="${existingClass[1]} drop-cap"`);
+    }
+    return `<p${attrs} class="drop-cap">${inner}</p>`;
   });
 }
 
@@ -263,7 +292,7 @@ function buildChapterXHTML(
     <h2 class="chapter-title">${escapeXml(chapter.title)}</h2>
   </div>
   <div class="chapter-body">
-    ${applyDropCap(chapter.content, template)}
+    ${applyDropCap(sanitizeXhtml(chapter.content), template)}
   </div>
 </body>
 </html>`;
@@ -399,7 +428,7 @@ function buildSimplePageXHTML(heading: string, content: string, template: Templa
   <div class="chapter-start">
     <h2 class="chapter-title">${escapeXml(heading)}</h2>
   </div>
-  <div class="chapter-body">${content}</div>
+  <div class="chapter-body">${sanitizeXhtml(content)}</div>
 </body>
 </html>`;
 }
@@ -410,20 +439,38 @@ function buildNavXHTML(
   chapters: { id: string; filename: string }[],
   backMatter: { id: string; filename: string; label: string }[]
 ): string {
-  const frontItems = frontMatter
-    .map((f) => `    <li><a href="${f.filename}">${escapeXml(f.label)}</a></li>`)
-    .join('\n');
-
+  // Reader-facing TOC: chapters + back matter only (front matter is not shown)
   const chapterItems = chapters
     .map(
       (ch, i) =>
-        `    <li><a href="${ch.filename}">${escapeXml(bookData.chapters[i].title)}</a></li>`
+        `      <li><a href="${ch.filename}">${escapeXml(bookData.chapters[i].title)}</a></li>`
     )
     .join('\n');
 
   const backItems = backMatter
-    .map((b) => `    <li><a href="${b.filename}">${escapeXml(b.label)}</a></li>`)
+    .map((b) => `      <li><a href="${b.filename}">${escapeXml(b.label)}</a></li>`)
     .join('\n');
+
+  // Landmarks: EPUB 3 guide landmarks for navigation (not shown to readers)
+  const epubTypeMap: Record<string, string> = {
+    'half-title':  'frontmatter',
+    'title-page':  'titlepage',
+    'copyright':   'copyright-page',
+    'dedication':  'frontmatter',
+    'epigraph':    'frontmatter',
+  };
+  const landmarkItems = [
+    ...frontMatter.map((f) => {
+      const et = epubTypeMap[f.id] ?? 'frontmatter';
+      return `      <li><a epub:type="${et}" href="${f.filename}">${escapeXml(f.label)}</a></li>`;
+    }),
+    chapters.length > 0
+      ? `      <li><a epub:type="bodymatter" href="${chapters[0].filename}">${escapeXml(bookData.chapters[0].title)}</a></li>`
+      : '',
+    ...backMatter.map((b) =>
+      `      <li><a epub:type="backmatter" href="${b.filename}">${escapeXml(b.label)}</a></li>`
+    ),
+  ].filter(Boolean).join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
@@ -436,9 +483,14 @@ function buildNavXHTML(
   <nav epub:type="toc" id="toc">
     <h1>Contents</h1>
     <ol>
-${frontItems}
 ${chapterItems}
 ${backItems}
+    </ol>
+  </nav>
+  <nav epub:type="landmarks" hidden="hidden">
+    <h2>Guide</h2>
+    <ol>
+${landmarkItems}
     </ol>
   </nav>
 </body>
@@ -479,7 +531,7 @@ function buildContentOPF(
 ${manifestItems}
   </manifest>
   <spine toc="ncx">
-    <itemref idref="nav"/>
+    <itemref idref="nav" linear="no"/>
 ${spineItems}
   </spine>
 </package>`;

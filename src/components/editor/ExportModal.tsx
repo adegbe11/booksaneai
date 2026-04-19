@@ -1147,14 +1147,24 @@ function buildPrintHTML(
     );
   }
 
+  // ---- TOC layout metrics (calculated here so we can reserve the right number of pages)
+  const tocTitlePx     = Math.round(bodyPx * 1.3);
+  const tocEntryPx     = Math.round(bodyPx * 0.9);
+  const tocGap         = Math.round(tocEntryPx * 0.55);
+  const entriesPerPage = Math.max(10, Math.floor(
+    (contentH - tocTitlePx * 3) / (tocEntryPx + tocGap)
+  ));
+  // Reserve exactly enough pages for all chapters, always at least 2
+  const tocPageCount   = Math.max(2, Math.ceil(bookData.chapters.length / entriesPerPage) + 1);
+
   // ---- TOC placeholder (recto) ──────────────────────────────────────
   ensureRecto();
-  const tocSlotIdx  = allPages.length;       // index in allPages array
-  const tocStartPgNum = pageNum;             // page number for TOC
-  // Reserve 2 pages for TOC (enough for ~50 chapters)
-  allPages.push('__TOC_PLACEHOLDER_0__');
-  allPages.push('__TOC_PLACEHOLDER_1__');
-  pageNum += 2;
+  const tocSlotIdx     = allPages.length;
+  const tocStartPgNum  = pageNum;
+  for (let _ti = 0; _ti < tocPageCount; _ti++) {
+    allPages.push(`__TOC_PLACEHOLDER_${_ti}__`);
+  }
+  pageNum += tocPageCount;
 
   // ---- Chapters ─────────────────────────────────────────────────────
   const tocEntries: Array<{ label: string; page: number }> = [];
@@ -1353,13 +1363,6 @@ function buildPrintHTML(
   }
 
   // ---- Build and insert TOC ──────────────────────────────────────────
-  // Build two TOC pages (first always has heading, second only if needed)
-  const tocTitlePx  = Math.round(bodyPx * 1.3);
-  const tocEntryPx  = Math.round(bodyPx * 0.9);
-  const tocGap      = Math.round(tocEntryPx * 0.55);
-  const entriesPerPage = Math.max(10, Math.floor(
-    (contentH - tocTitlePx * 3) / (tocEntryPx + tocGap)
-  ));
 
   const buildTocPageHtml = (
     entries: Array<{ label: string; page: number }>,
@@ -1396,14 +1399,16 @@ function buildPrintHTML(
       + '</div></div>';
   };
 
-  const page1Entries = tocEntries.slice(0, entriesPerPage);
-  const page2Entries = tocEntries.slice(entriesPerPage);
-
-  allPages[tocSlotIdx]     = buildTocPageHtml(page1Entries, tocStartPgNum,     true);
-  allPages[tocSlotIdx + 1] = page2Entries.length > 0
-    ? buildTocPageHtml(page2Entries, tocStartPgNum + 1, false)
-    : '<div class="book-page" style="width:' + pxW + 'px;height:' + pxH + 'px;'
-      + 'background:' + (template.paperColor || '#fff') + ';"></div>';
+  // Fill every reserved TOC slot — handles any number of chapters
+  for (let _tp = 0; _tp < tocPageCount; _tp++) {
+    const sliceStart = _tp * entriesPerPage;
+    const sliceEnd   = sliceStart + entriesPerPage;
+    const pageEntries = tocEntries.slice(sliceStart, sliceEnd);
+    allPages[tocSlotIdx + _tp] = pageEntries.length > 0 || _tp === 0
+      ? buildTocPageHtml(pageEntries, tocStartPgNum + _tp, _tp === 0)
+      : '<div class="book-page" style="width:' + pxW + 'px;height:' + pxH + 'px;'
+        + 'background:' + (template.paperColor || '#fff') + ';"></div>';
+  }
 
   // ---- Assemble final HTML ------------------------------------------
   // All fonts used across all 8 templates
