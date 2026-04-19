@@ -111,6 +111,18 @@ export async function generateEpub(bookData: BookData, template: Template): Prom
 // ─────────────────────────────────────────
 
 function buildEpubCSS(template: Template): string {
+  const dropCapCss = template.dropCap ? `
+.drop-cap::first-letter {
+  float: left;
+  font-family: ${template.headingFont};
+  font-size: 3.6em;
+  line-height: 0.82;
+  font-weight: 700;
+  color: ${template.accentColor};
+  padding-right: 4px;
+  margin-top: 4px;
+}` : '';
+
   return `
 @charset "UTF-8";
 body {
@@ -122,12 +134,39 @@ body {
   margin: 0;
   padding: 1em 1.5em;
 }
-h1, h2, h3 {
+/* Chapter-level headings */
+h1, h2.chapter-title {
   font-family: ${template.headingFont};
+  font-size: 1.8em;
   font-weight: ${template.headingWeight};
   text-align: ${template.headingAlign};
   text-transform: ${template.headingTransform};
   color: ${template.headingColor};
+  margin-bottom: 2em;
+}
+/* In-chapter section headings (H2/H3 added by author in Tiptap) */
+.chapter-body h1 {
+  font-family: ${template.headingFont};
+  font-size: 1.35em;
+  font-weight: ${template.headingWeight};
+  color: ${template.headingColor};
+  text-transform: ${template.headingTransform};
+  margin: 1.5em 0 0.5em;
+}
+.chapter-body h2 {
+  font-family: ${template.headingFont};
+  font-size: 1.15em;
+  font-weight: ${template.headingWeight};
+  color: ${template.headingColor};
+  margin: 1.3em 0 0.4em;
+}
+.chapter-body h3 {
+  font-family: ${template.bodyFont};
+  font-size: 1em;
+  font-weight: 700;
+  font-style: italic;
+  color: ${template.headingColor};
+  margin: 1.1em 0 0.3em;
 }
 p {
   margin: 0;
@@ -137,29 +176,49 @@ p {
 p + p {
   margin-top: ${template.paragraphStyle === 'indent' ? '0' : template.paragraphSpacing};
 }
+h1 + p, h2 + p, h3 + p, .chapter-start + p {
+  text-indent: 0;
+}
 .chapter-start {
   padding-top: 3em;
 }
 .chapter-number {
   display: block;
   font-family: ${template.headingFont};
-  font-size: 1.5em;
+  font-size: 1.2em;
   font-weight: ${template.headingWeight};
   text-align: ${template.headingAlign};
   color: ${template.accentColor};
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
   margin-bottom: 0.3em;
 }
 .chapter-title {
   font-family: ${template.headingFont};
   font-size: 1.8em;
+  font-weight: ${template.headingWeight};
+  text-align: ${template.headingAlign};
+  text-transform: ${template.headingTransform};
+  color: ${template.headingColor};
   margin-bottom: 2em;
 }
 .section-break {
   text-align: center;
-  margin: 2em 0;
+  margin: 1.5em 0;
   color: ${template.accentColor};
+  opacity: 0.7;
 }
+${dropCapCss}
 `;
+}
+
+function applyDropCap(content: string, template: Template): string {
+  if (!template.dropCap) return content;
+  // Add drop-cap class to the first <p> that has actual text content
+  return content.replace(/<p([^>]*)>/, (match, attrs) => {
+    if (/class="section-break"/.test(attrs)) return match;
+    return `<p${attrs} class="drop-cap">`;
+  });
 }
 
 function buildChapterXHTML(
@@ -184,7 +243,7 @@ function buildChapterXHTML(
     <h2 class="chapter-title">${escapeXml(chapter.title)}</h2>
   </div>
   <div class="chapter-body">
-    ${chapter.content}
+    ${applyDropCap(chapter.content, template)}
   </div>
 </body>
 </html>`;

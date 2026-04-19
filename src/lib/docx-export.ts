@@ -17,24 +17,91 @@ export async function generateDocx(bookData: BookData, template: Template): Prom
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const children: any[] = [];
 
-  // ── helper: strip HTML tags
-  const stripHtml = (html: string) =>
-    html.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim();
+  // ── helper: parse inline HTML to docx TextRun array (preserves bold/italic/underline/strike)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const decodeEntities = (s: string) => s
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n));
 
-  // ── helper: parse HTML paragraphs
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const innerHtmlToRuns = (html: string): any[] => {
+    const runs: any[] = [];
+    let bold = false, italic = false, under = false, strike = false, sup = false, sub = false;
+    let text = '';
+    const flush = () => {
+      if (!text) return;
+      runs.push(new TextRun({
+        text: decodeEntities(text),
+        bold:      bold      || undefined,
+        italics:   italic    || undefined,
+        underline: under     ? {} : undefined,
+        strike:    strike    || undefined,
+        superScript: sup     || undefined,
+        subScript:   sub     || undefined,
+      }));
+      text = '';
+    };
+    let i = 0;
+    while (i < html.length) {
+      if (html[i] === '<') {
+        flush();
+        const end = html.indexOf('>', i);
+        if (end === -1) { text += html[i++]; continue; }
+        const raw  = html.slice(i + 1, end);
+        const close = raw[0] === '/';
+        const name  = (close ? raw.slice(1) : raw).split(/[\s/]/)[0].toLowerCase();
+        if      (name === 'strong' || name === 'b')  bold   = !close;
+        else if (name === 'em'     || name === 'i')  italic = !close;
+        else if (name === 'u')                       under  = !close;
+        else if (name === 's' || name === 'del')     strike = !close;
+        else if (name === 'sup')                     sup    = !close;
+        else if (name === 'sub')                     sub    = !close;
+        else if (name === 'br')                      text  += '\n';
+        i = end + 1;
+      } else {
+        text += html[i++];
+      }
+    }
+    flush();
+    return runs.length ? runs : [new TextRun({ text: decodeEntities(html.replace(/<[^>]*>/g, '')) })];
+  };
+
+  // ── helper: parse HTML paragraphs preserving inline formatting
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const htmlToParagraphs = (html: string, indent: boolean): any[] => {
-    const rawParas = html.split(/<\/p>|<br\s*\/?>/i).filter(Boolean);
-    return rawParas.map((raw) => {
-      const text = stripHtml(raw);
-      if (!text) return new Paragraph({ text: '' });
-      return new Paragraph({
-        text,
-        style: 'BodyText',
-        indent: indent ? { firstLine: 720 } : undefined, // 720 twips = 0.5 inch
-        spacing: indent ? { before: 0, after: 0 } : { after: 160 },
-      });
-    }).filter((p) => p !== null);
+    const paras: any[] = [];
+    const re = /<(h[1-3]|p)([^>]*)>([\s\S]*?)<\/\1>/gi;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html)) !== null) {
+      const tag   = m[1].toLowerCase();
+      const inner = m[3];
+      const plain = inner.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+      if (!plain && !inner.trim()) continue;
+      const runs  = innerHtmlToRuns(inner);
+      if (tag === 'p') {
+        // Check for section break
+        if (/class="section-break"/.test(m[2]) || /^\* \* \*$/.test(plain)) {
+          paras.push(new Paragraph({
+            children: [new TextRun({ text: '* * *' })],
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 240, after: 240 },
+          }));
+        } else {
+          paras.push(new Paragraph({
+            children: runs,
+            style: 'BodyText',
+            indent: indent ? { firstLine: 720 } : undefined,
+            spacing: indent ? { before: 0, after: 0 } : { after: 160 },
+          }));
+        }
+      } else {
+        // In-chapter headings from Tiptap (H1/H2/H3)
+        const level = tag === 'h1' ? HeadingLevel.HEADING_2 : HeadingLevel.HEADING_3;
+        paras.push(new Paragraph({ children: runs, heading: level, spacing: { before: 240, after: 120 } }));
+      }
+    }
+    return paras.length ? paras : [new Paragraph({ children: [new TextRun({ text: '' })] })];
   };
 
   // ── TITLE PAGE

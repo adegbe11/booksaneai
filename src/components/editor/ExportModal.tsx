@@ -162,7 +162,7 @@ export default function ExportModal({
         zip.file(`${slug}.epub`, blob);
       }
       if (needsPdf) {
-        const pdfBlob = await generatePdfBlob(bookData, template, pages, trimSize);
+        const pdfBlob = await generatePdfBlob(bookData, template, pages, trimSize, { dropCaps, hideChapterNumbers });
         zip.file(`${slug}.pdf`, pdfBlob);
       }
       if (needsDocx) {
@@ -216,7 +216,7 @@ export default function ExportModal({
 
       // ── PDF (via jsPDF + html2canvas)
       if (pdfSelected) {
-        const pdfBlob = await generatePdfBlob(bookData, template, pages, trimSize);
+        const pdfBlob = await generatePdfBlob(bookData, template, pages, trimSize, { dropCaps, hideChapterNumbers });
         zip.file(`${slug}.pdf`, pdfBlob);
       }
 
@@ -922,11 +922,41 @@ export default function ExportModal({
 //  PDF HTML BUILDER
 // ─────────────────────────────────────────
 
+// Roman numerals
+function toRomanNumeral(n: number): string {
+  const vals = [1000,900,500,400,100,90,50,40,10,9,5,4,1];
+  const syms = ['M','CM','D','CD','C','XC','L','XL','X','IX','V','IV','I'];
+  let r = '';
+  for (let i = 0; i < vals.length; i++) { while (n >= vals[i]) { r += syms[i]; n -= vals[i]; } }
+  return r;
+}
+const SPELLED_NUMS = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine',
+  'Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen',
+  'Eighteen','Nineteen','Twenty','Twenty-One','Twenty-Two','Twenty-Three','Twenty-Four','Twenty-Five'];
+function formatChNum(n: number, style: string): string {
+  if (style === 'roman') return toRomanNumeral(n);
+  if (style === 'spelled') return n < SPELLED_NUMS.length ? SPELLED_NUMS[n] : String(n);
+  return String(n);
+}
+
+// Parse Tiptap HTML into block elements (p, h1, h2, h3)
+interface HtmlBlock { type: 'p'|'h1'|'h2'|'h3'; inner: string; attrs: string; }
+function parseBlocks(html: string): HtmlBlock[] {
+  const blocks: HtmlBlock[] = [];
+  const re = /<(h[1-3]|p)([^>]*)>([\s\S]*?)<\/\1>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    blocks.push({ type: m[1].toLowerCase() as HtmlBlock['type'], attrs: m[2], inner: m[3] });
+  }
+  return blocks;
+}
+
 function buildPrintHTML(
   bookData: BookData,
   template: ReturnType<typeof getTemplate>,
   _pages: BookPage[],
-  trimSize = '6x9'
+  trimSize = '6x9',
+  options: { dropCaps: boolean; hideChapterNumbers: boolean } = { dropCaps: true, hideChapterNumbers: false }
 ): string {
   const pageSize = TRIM_SIZE_CSS[trimSize] ?? '6in 9in';
 
@@ -1099,12 +1129,16 @@ function buildPrintHTML(
 
     const startDrop = Math.round(contentH * 0.25); // 25% drop before heading
 
+    const chNumDisplay = formatChNum(chapter.number, template.chapterNumberStyle || 'numeral');
     const chapterHeader =
       '<div style="padding-top:' + startDrop + 'px;text-align:' + template.headingAlign + ';">'
-      + '<span style="display:block;font-family:' + template.headingFont + ';'
-      + 'font-size:' + chapNumPx + 'px;font-weight:' + template.headingWeight + ';'
-      + 'color:' + template.accentColor + ';letter-spacing:0.18em;'
-      + 'text-transform:uppercase;margin-bottom:0.55em;">Chapter ' + chapter.number + '</span>'
+      + (!options.hideChapterNumbers
+          ? '<span style="display:block;font-family:' + template.headingFont + ';'
+            + 'font-size:' + chapNumPx + 'px;font-weight:' + template.headingWeight + ';'
+            + 'color:' + template.accentColor + ';letter-spacing:0.18em;'
+            + 'text-transform:uppercase;margin-bottom:0.55em;">'
+            + (template.chapterNumberStyle === 'numeral' ? 'Chapter ' : '') + chNumDisplay + '</span>'
+          : '')
       + (isMeaningful
           ? '<div style="font-family:' + template.headingFont + ';font-size:' + headPx + 'px;'
             + 'font-weight:' + template.headingWeight + ';color:' + template.headingColor + ';'
@@ -1118,60 +1152,104 @@ function buildPrintHTML(
       + (isMeaningful ? Math.ceil((headPx * 1.2) / (bodyPx * lineH)) + 1 : 0)
       + 3;
 
-    // Split chapter HTML content into individual <p> blocks
-    const rawParas = chapter.content
-      .split(/(?<=<\/p>)/)
-      .map((s: string) => s.trim())
-      .filter(Boolean);
+    // Parse Tiptap HTML: handles <p>, <h1>, <h2>, <h3>
+    const blocks = parseBlocks(chapter.content);
 
     let pageContent   = chapterHeader;
     let linesUsed     = headerLines;
     let isChapterPage = true;
     let isFirstPara   = true;
 
-    for (const paraHtml of rawParas) {
-      // Section break
-      const plainText = paraHtml.replace(/<[^>]*>/g, '').trim();
-      const isSectionBreak = /class="section-break"/.test(paraHtml)
-        || /^[*\-~]{1,3}$/.test(plainText);
+    // Drop cap size: 3 lines tall
+    const dropCapPx = Math.round(bodyPx * lineH * 3);
+
+    for (const block of blocks) {
+      const plainText = block.inner.replace(/<[^>]*>/g, '').trim();
+
+      // ── Section break ──
+      const isSectionBreak = /class="section-break"/.test(block.attrs + block.inner)
+        || /^[*\u2217]{1,3}$/.test(plainText);
       if (isSectionBreak) {
-        pageContent +=
-          '<div style="text-align:center;margin:' + Math.round(bodyPx * 0.9) + 'px 0;'
-          + 'color:' + template.accentColor + ';font-size:' + bodyPx + 'px;opacity:0.55;">'
-          + '* * *</div>';
-        linesUsed += 1.2;
+        // Use template ornament, fall back to * * *
+        const ornamentHtml = template.ornament
+          ? template.ornament.replace(/\[ACCENT\]/g, template.accentColor)
+          : '<div style="text-align:center;margin:1.2em 0;color:' + template.accentColor
+            + ';font-size:' + bodyPx + 'px;opacity:0.55;">* * *</div>';
+        pageContent += '<div style="margin:' + Math.round(bodyPx * 0.9) + 'px 0;">'
+          + ornamentHtml + '</div>';
+        linesUsed += 1.8;
+        isFirstPara = false;
         continue;
       }
 
-      // Extract inner HTML (preserves <em> <strong> etc.)
-      const innerMatch = paraHtml.match(/<p[^>]*>([\s\S]*?)<\/p>/);
-      if (!innerMatch) continue;
-      const innerHtml = innerMatch[1];
-      const textLen   = innerHtml.replace(/<[^>]*>/g, '').length;
-      const paraCost  = Math.max(1, Math.ceil(textLen / charsPerLine))
-        + (template.paragraphStyle === 'spaced' ? 0.7 : 0);
+      if (!plainText) continue;
 
-      // Flush when page is full (always keep at least 1 para on chapter-start page)
-      if (linesUsed > headerLines && linesUsed + paraCost > linesPerPage) {
-        addPage(pageContent, { isChapterStart: isChapterPage, chapterTitle: chTitle });
-        isChapterPage = false;
-        pageContent   = '';
-        linesUsed     = 0;
+      // ── Heading block (H1/H2/H3 from Tiptap paragraph styles) ──
+      if (block.type !== 'p') {
+        const hSizes: Record<string, number> = {
+          h1: Math.round(headPx * 1.1),
+          h2: Math.round(bodyPx * 1.45),
+          h3: Math.round(bodyPx * 1.15),
+        };
+        const hSize  = hSizes[block.type] || headPx;
+        const hCost  = Math.ceil((hSize * 1.3) / (bodyPx * lineH)) + 1;
+
+        if (linesUsed + hCost > linesPerPage) {
+          addPage(pageContent, { isChapterStart: isChapterPage, chapterTitle: chTitle });
+          isChapterPage = false; pageContent = ''; linesUsed = 0;
+        }
+
+        pageContent +=
+          '<div style="font-family:' + template.headingFont + ';'
+          + 'font-size:' + hSize + 'px;'
+          + 'font-weight:' + template.headingWeight + ';'
+          + 'color:' + template.headingColor + ';'
+          + 'text-transform:' + (block.type === 'h1' ? template.headingTransform : 'none') + ';'
+          + 'text-align:' + template.headingAlign + ';'
+          + 'margin:' + Math.round(hSize * 0.9) + 'px 0 ' + Math.round(hSize * 0.45) + 'px;'
+          + 'line-height:1.2;">'
+          + block.inner + '</div>';
+        linesUsed  += hCost;
+        isFirstPara = true; // reset indent after a heading
+        continue;
       }
 
-      // First paragraph after chapter heading: no indent (publishing standard)
-      const indent = template.paragraphStyle === 'indent' && !isFirstPara
-        ? Math.round(bodyPx * 1.8) + 'px'
-        : '0';
-      const mb = template.paragraphStyle === 'spaced'
-        ? Math.round(bodyPx * 0.65) + 'px'
-        : '0';
+      // ── Body paragraph ──
+      const textLen  = plainText.length;
+      const paraCost = Math.max(1, Math.ceil(textLen / charsPerLine))
+        + (template.paragraphStyle === 'spaced' ? 0.7 : 0);
 
-      pageContent +=
-        '<p style="margin:0 0 ' + mb + ';padding:0;text-indent:' + indent + ';'
-        + 'font-family:' + template.bodyFont + ';font-size:' + bodyPx + 'px;'
-        + 'line-height:' + lineH + ';color:' + template.inkColor + ';">'
-        + innerHtml + '</p>';
+      if (linesUsed > headerLines && linesUsed + paraCost > linesPerPage) {
+        addPage(pageContent, { isChapterStart: isChapterPage, chapterTitle: chTitle });
+        isChapterPage = false; pageContent = ''; linesUsed = 0;
+      }
+
+      const indent = template.paragraphStyle === 'indent' && !isFirstPara
+        ? Math.round(bodyPx * 1.8) + 'px' : '0';
+      const mb = template.paragraphStyle === 'spaced'
+        ? Math.round(bodyPx * 0.65) + 'px' : '0';
+
+      // Drop cap on first paragraph of each chapter
+      if (options.dropCaps && isFirstPara && plainText.length > 0) {
+        const firstChar  = block.inner.replace(/^(<[^>]*>)*/, ''); // skip leading tags
+        const firstLetter = firstChar.replace(/<[^>]*>/g, '').charAt(0);
+        const afterLetter = block.inner.replace(firstLetter, '');
+        pageContent +=
+          '<p style="margin:0 0 ' + mb + ';padding:0;text-indent:0;overflow:hidden;'
+          + 'font-family:' + template.bodyFont + ';font-size:' + bodyPx + 'px;'
+          + 'line-height:' + lineH + ';color:' + template.inkColor + ';">'
+          + '<span style="float:left;font-family:' + template.headingFont + ';'
+          + 'font-size:' + dropCapPx + 'px;font-weight:700;'
+          + 'line-height:0.82;padding-right:4px;margin-top:4px;color:' + template.accentColor + ';">'
+          + escapeHtml(firstLetter) + '</span>'
+          + afterLetter + '</p>';
+      } else {
+        pageContent +=
+          '<p style="margin:0 0 ' + mb + ';padding:0;text-indent:' + indent + ';'
+          + 'font-family:' + template.bodyFont + ';font-size:' + bodyPx + 'px;'
+          + 'line-height:' + lineH + ';color:' + template.inkColor + ';">'
+          + block.inner + '</p>';
+      }
       linesUsed  += paraCost;
       isFirstPara = false;
     }
@@ -1218,7 +1296,8 @@ async function generatePdfBlob(
   bookData: BookData,
   template: ReturnType<typeof getTemplate>,
   pages: BookPage[],
-  trimSize: string
+  trimSize: string,
+  options: { dropCaps: boolean; hideChapterNumbers: boolean } = { dropCaps: true, hideChapterNumbers: false }
 ): Promise<Blob> {
   const { default: jsPDF } = await import('jspdf');
   const { default: html2canvas } = await import('html2canvas');
@@ -1237,7 +1316,7 @@ async function generatePdfBlob(
   const [ptW, ptH] = TRIM_PX[trimSize] ?? [432, 648];
 
   // Render the book HTML into a hidden off-screen container
-  const printHtml = buildPrintHTML(bookData, template, pages, trimSize);
+  const printHtml = buildPrintHTML(bookData, template, pages, trimSize, options);
 
   const container = document.createElement('div');
   container.style.cssText = `position:fixed;left:-9999px;top:0;width:${ptW * (96/72)}px;background:#fff;`;
