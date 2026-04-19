@@ -13,7 +13,7 @@ import {
 import './globals.css';
 import Preloader from '@/components/Preloader';
 import SmoothScroll from '@/components/SmoothScroll';
-import Cursor from '@/components/Cursor';
+// import Cursor from '@/components/Cursor';
 import PageTransition from '@/components/PageTransition';
 import HoverSound from '@/components/HoverSound';
 
@@ -125,7 +125,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="antialiased">
         <SmoothScroll />
         <Preloader />
-        <Cursor />
+        {/* <Cursor /> */}
         <PageTransition />
         {children}
         <HoverSound />
