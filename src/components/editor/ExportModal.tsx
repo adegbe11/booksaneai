@@ -163,7 +163,8 @@ export default function ExportModal({
         zip.file(`${slug}.epub`, blob);
       }
       if (needsPdf) {
-        generatePdfPrint(bookData, template, pages, trimSize, { dropCaps, hideChapterNumbers });
+        const pdfBlob = await generatePdfBlob(bookData, template, pages, trimSize, { dropCaps, hideChapterNumbers });
+        zip.file(`${slug}.pdf`, pdfBlob);
       }
       if (needsDocx) {
         const { generateDocx } = await import('@/lib/docx-export');
@@ -214,9 +215,10 @@ export default function ExportModal({
         zip.file(`${slug}.docx`, blob);
       }
 
-      // ── PDF (vector, via browser print dialog)
+      // ── PDF (print-ready, 3x scale high-DPI)
       if (pdfSelected) {
-        generatePdfPrint(bookData, template, pages, trimSize, { dropCaps, hideChapterNumbers });
+        const pdfBlob = await generatePdfBlob(bookData, template, pages, trimSize, { dropCaps, hideChapterNumbers });
+        zip.file(`${slug}.pdf`, pdfBlob);
       }
 
       // ── README
@@ -1725,25 +1727,80 @@ function escapeHtml(str: string): string {
 }
 
 // ─────────────────────────────────────────
-//  PDF GENERATOR (vector, browser print)
+//  PDF BLOB GENERATOR
+//  Renders each book page via html2canvas at 3x scale
+//  (high-DPI print quality) then composes into jsPDF.
+//  Returns a Blob that gets zipped with EPUB and DOCX.
 // ─────────────────────────────────────────
 
-function generatePdfPrint(
+async function generatePdfBlob(
   bookData: BookData,
   template: ReturnType<typeof getTemplate>,
   pages: BookPage[],
   trimSize: string,
   options: { dropCaps: boolean; hideChapterNumbers: boolean } = { dropCaps: true, hideChapterNumbers: false }
-): void {
-  const html = buildPrintHTML(bookData, template, pages, trimSize, options);
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const win = window.open(url, '_blank', 'noopener');
-  if (!win) {
-    alert('Pop-ups are blocked. Please allow pop-ups for this site, then try again.');
+): Promise<Blob> {
+  const { default: jsPDF } = await import('jspdf');
+  const { default: html2canvas } = await import('html2canvas');
+
+  // Trim size → inches → points (1in = 72pt)
+  const TRIM_PT: Record<string, [number, number]> = {
+    '5x8':     [360, 576],
+    '5.5x8.5': [396, 612],
+    '6x9':     [432, 648],
+    'digest':  [364.3, 562.3],
+    'mass':    [306, 494.6],
+    'a5':      [419.5, 595.3],
+    '7x10':    [504, 720],
+    '8.5x11':  [612, 792],
+  };
+  const [ptW, ptH] = TRIM_PT[trimSize] ?? [432, 648];
+  const pxW = Math.round(ptW * 96 / 72);
+  const pxH = Math.round(ptH * 96 / 72);
+
+  // Render the book into a hidden off-screen container so fonts load
+  const printHtml = buildPrintHTML(bookData, template, pages, trimSize, options);
+  const container = document.createElement('div');
+  container.style.cssText = `position:fixed;left:-99999px;top:0;width:${pxW}px;background:#fff;pointer-events:none;`;
+  container.innerHTML = printHtml;
+  document.body.appendChild(container);
+
+  // Give webfonts time to load
+  try {
+    if (document.fonts && document.fonts.ready) {
+      await document.fonts.ready;
+    }
+  } catch { /* ignore */ }
+  await new Promise(r => setTimeout(r, 500));
+
+  const pdf = new jsPDF({ unit: 'pt', format: [ptW, ptH], orientation: 'portrait', compress: true });
+
+  // Capture each book-page separately so page breaks align with PDF pages
+  const pageDivs = container.querySelectorAll<HTMLElement>('.book-page, .front-page');
+  const elements = pageDivs.length > 0 ? Array.from(pageDivs) : [container];
+
+  for (let i = 0; i < elements.length; i++) {
+    if (i > 0) pdf.addPage([ptW, ptH]);
+    const el = elements[i];
+    // Force the captured element to exactly the page size
+    el.style.width = pxW + 'px';
+    el.style.height = pxH + 'px';
+    const canvas = await html2canvas(el, {
+      scale: 3,                         // 3x for print quality (~288 DPI)
+      useCORS: true,
+      backgroundColor: template.paperColor || '#ffffff',
+      logging: false,
+      imageTimeout: 0,
+      windowWidth: pxW,
+      windowHeight: pxH,
+      removeContainer: false,
+    });
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    pdf.addImage(imgData, 'JPEG', 0, 0, ptW, ptH, undefined, 'FAST');
   }
-  // URL is revoked once the new window has loaded the blob
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+  document.body.removeChild(container);
+  return pdf.output('blob');
 }
 
 // ─────────────────────────────────────────
