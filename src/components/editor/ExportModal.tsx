@@ -912,54 +912,283 @@ export default function ExportModal({
 function buildPrintHTML(
   bookData: BookData,
   template: ReturnType<typeof getTemplate>,
-  pages: BookPage[],
+  _pages: BookPage[],
   trimSize = '6x9'
 ): string {
   const pageSize = TRIM_SIZE_CSS[trimSize] ?? '6in 9in';
 
-  // Compute pixel dimensions matching generatePdfBlob's container (pt × 96/72)
+  // Trim size -> pixel dimensions (pt * 96/72)
   const TRIM_PT: Record<string, [number, number]> = {
-    '5x8':     [360, 576],
-    '5.5x8.5': [396, 612],
-    '6x9':     [432, 648],
-    'digest':  [364.3, 562.3],
-    'mass':    [306, 494.6],
-    'a5':      [419.5, 595.3],
-    '7x10':    [504, 720],
-    '8.5x11':  [612, 792],
+    '5x8':     [360, 576],  '5.5x8.5': [396, 612],  '6x9':    [432, 648],
+    'digest':  [364, 562],  'mass':     [306, 495],  'a5':     [420, 595],
+    '7x10':    [504, 720],  '8.5x11':  [612, 792],
   };
   const [ptW, ptH] = TRIM_PT[trimSize] ?? [432, 648];
   const pxW = Math.round(ptW * 96 / 72);
   const pxH = Math.round(ptH * 96 / 72);
 
-  // Wrap every paginator page in a sized .book-page so generatePdfBlob
-  // finds them all via querySelectorAll('.book-page').
-  // Each page already contains running headers, page numbers, and correct
-  // first-paragraph indent from wrapInPage() / wrapParagraph() in paginator.ts.
-  const pageContents = pages
-    .map((p) => `<div class="book-page" style="width:${pxW}px;height:${pxH}px;overflow:hidden;position:relative;background:${template.paperColor || '#fff'};">${p.content}</div>`)
-    .join('\n');
+  // Typography at real print scale (not the tiny preview scale)
+  const bodyPx    = Math.round(11   * 96 / 72); // 11pt  ~15px
+  const headPx    = Math.round(22   * 96 / 72); // 22pt  ~29px
+  const chapNumPx = Math.round(10   * 96 / 72); // 10pt  ~13px
+  const rulerPx   = Math.round(7.5  * 96 / 72); // 7.5pt ~10px
+  const lineH     = parseFloat(template.lineHeight) || 1.6;
 
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>${escapeHtml(bookData.title)}</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400;0,600;1,400&family=Merriweather:ital,wght@0,300;0,400;1,300&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;600;700&display=swap');
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  @page { size: ${pageSize}; margin: 0; }
-  html, body { margin: 0; padding: 0; background: #fff; }
-  .book-page { display: block; }
-  @media print { .watermark { display: none; } }
-</style>
-</head>
-<body>
-${pageContents}
-</body>
-</html>`;
+  // Margins: inner (gutter) wider than outer for binding
+  const mTop   = Math.round(pxH * 0.111); // ~0.9in on 6x9
+  const mBot   = Math.round(pxH * 0.111);
+  const mOuter = Math.round(pxW * 0.125); // ~0.75in
+  const mInner = Math.round(pxW * 0.146); // ~0.875in gutter
+
+  // Content zone
+  const headH    = Math.round(rulerPx * 2.4 + 8);
+  const folioH   = Math.round(bodyPx  * 2.2);
+  const contentW = pxW - mOuter - mInner;
+  const contentH = pxH - mTop - mBot - headH - folioH;
+
+  // Pagination heuristic
+  const charsPerLine = Math.max(30, Math.floor(contentW / (bodyPx * 0.48)));
+  const linesPerPage = Math.max(10, Math.floor(contentH / (bodyPx * lineH)));
+
+  let pageNum = 1;
+  const allPages: string[] = [];
+
+  function addPage(
+    content: string,
+    opts: { isChapterStart?: boolean; chapterTitle?: string; suppressHead?: boolean } = {}
+  ): void {
+    const even     = pageNum % 2 === 0; // even = verso, odd = recto
+    const showHead = !opts.suppressHead && !opts.isChapterStart;
+    const headTxt  = showHead
+      ? (even ? (bookData.author || '') : (opts.chapterTitle || ''))
+      : '';
+    // Verso: outer margin on left.  Recto: gutter on left.
+    const cLeft = even ? mOuter : mInner;
+
+    const runHead = headTxt
+      ? '<div style="position:absolute;top:' + mTop + 'px;'
+        + (even ? 'left:' + mOuter + 'px;' : 'right:' + mOuter + 'px;')
+        + 'width:' + contentW + 'px;height:' + headH + 'px;'
+        + 'display:flex;align-items:flex-end;'
+        + (even ? 'justify-content:flex-start;' : 'justify-content:flex-end;')
+        + 'padding-bottom:3px;border-bottom:0.5px solid ' + template.inkColor + '55;">'
+        + '<span style="font-family:' + template.bodyFont + ';font-size:' + rulerPx + 'px;'
+        + 'color:' + template.inkColor + ';font-variant:small-caps;'
+        + 'letter-spacing:0.09em;opacity:0.65;">' + headTxt + '</span>'
+        + '</div>'
+      : '';
+
+    const folio = showHead
+      ? '<div style="position:absolute;bottom:' + Math.round(mBot * 0.45) + 'px;'
+        + (even ? 'left:' + mOuter + 'px' : 'right:' + mOuter + 'px') + ';'
+        + 'font-family:' + template.bodyFont + ';font-size:' + rulerPx + 'px;'
+        + 'color:' + template.inkColor + ';opacity:0.5;">' + pageNum + '</div>'
+      : '';
+
+    const cTop = mTop + (opts.isChapterStart ? 0 : headH);
+    const cH   = pxH - cTop - Math.round(mBot * 0.9);
+
+    allPages.push(
+      '<div class="book-page" style="width:' + pxW + 'px;height:' + pxH + 'px;'
+      + 'position:relative;overflow:hidden;background:' + (template.paperColor || '#fff') + ';">'
+      + runHead
+      + '<div style="position:absolute;top:' + cTop + 'px;left:' + cLeft + 'px;'
+      + 'width:' + contentW + 'px;height:' + cH + 'px;overflow:hidden;">'
+      + content
+      + '</div>'
+      + folio
+      + '</div>'
+    );
+    pageNum++;
+  }
+
+  function addBlank(): void   { addPage('', { suppressHead: true }); }
+  function ensureRecto(): void { if (pageNum % 2 === 0) addBlank(); }
+
+  const yr = new Date().getFullYear();
+
+  // ---- Title page (always recto) ------------------------------------
+  if (pageNum % 2 === 0) addBlank();
+  addPage(
+    '<div style="display:flex;flex-direction:column;align-items:center;'
+    + 'justify-content:center;height:100%;text-align:center;">'
+    + '<div style="font-family:' + template.headingFont + ';'
+    + 'font-size:' + Math.round(headPx * 1.45) + 'px;'
+    + 'font-weight:' + template.headingWeight + ';color:' + template.headingColor + ';'
+    + 'line-height:1.2;margin-bottom:0.25em;text-transform:' + template.headingTransform + ';">'
+    + escapeHtml(bookData.title) + '</div>'
+    + (bookData.subtitle
+        ? '<div style="font-family:' + template.headingFont + ';'
+          + 'font-size:' + Math.round(bodyPx * 1.1) + 'px;font-style:italic;'
+          + 'color:' + template.accentColor + ';margin-bottom:1.8em;">'
+          + escapeHtml(bookData.subtitle) + '</div>'
+        : '')
+    + '<div style="font-family:' + template.bodyFont + ';'
+    + 'font-size:' + Math.round(bodyPx * 1.05) + 'px;'
+    + 'color:' + template.inkColor + ';margin-top:2.5em;">'
+    + escapeHtml(bookData.author || '') + '</div></div>',
+    { suppressHead: true }
+  );
+
+  // ---- Copyright page (verso) ---------------------------------------
+  addPage(
+    '<div style="position:absolute;bottom:' + (folioH + 4) + 'px;left:0;right:0;'
+    + 'font-size:' + Math.round(bodyPx * 0.72) + 'px;line-height:1.75;'
+    + 'color:' + template.inkColor + ';opacity:0.72;">'
+    + '<p style="margin-bottom:0.5em;">Copyright &copy; ' + yr + ' '
+    + escapeHtml(bookData.author || 'the Author') + '</p>'
+    + '<p style="margin-bottom:0.5em;">All rights reserved. No part of this publication may be '
+    + 'reproduced, distributed, or transmitted in any form or by any means without the prior '
+    + 'written permission of the publisher.</p>'
+    + '<p>Formatted with <em>Booksane</em>.</p></div>',
+    { suppressHead: true }
+  );
+
+  // ---- Dedication ---------------------------------------------------
+  if (bookData.dedication) {
+    ensureRecto();
+    addPage(
+      '<div style="display:flex;flex-direction:column;align-items:center;'
+      + 'justify-content:center;height:100%;text-align:center;">'
+      + '<p style="font-style:italic;font-size:' + bodyPx + 'px;line-height:1.9;'
+      + 'max-width:' + Math.round(contentW * 0.82) + 'px;color:' + template.inkColor + ';">'
+      + escapeHtml(bookData.dedication) + '</p></div>',
+      { suppressHead: true }
+    );
+  }
+
+  // ---- Epigraph -----------------------------------------------------
+  if (bookData.epigraph) {
+    ensureRecto();
+    addPage(
+      '<div style="display:flex;flex-direction:column;justify-content:center;'
+      + 'height:100%;max-width:' + Math.round(contentW * 0.85) + 'px;">'
+      + '<p style="font-style:italic;font-size:' + bodyPx + 'px;line-height:1.9;'
+      + 'margin-bottom:0.6em;color:' + template.inkColor + ';">'
+      + '&ldquo;' + escapeHtml(bookData.epigraph) + '&rdquo;</p>'
+      + (bookData.epigraphAttribution
+          ? '<p style="font-size:' + Math.round(bodyPx * 0.85) + 'px;'
+            + 'color:' + template.accentColor + ';text-align:right;">'
+            + '&mdash; ' + escapeHtml(bookData.epigraphAttribution) + '</p>'
+          : '')
+      + '</div>',
+      { suppressHead: true }
+    );
+  }
+
+  // ---- Chapters -----------------------------------------------------
+  for (const chapter of bookData.chapters) {
+    ensureRecto(); // chapters always start on a right-hand (odd) page
+
+    const isMeaningful = chapter.title &&
+      !/^chapter\s+\d+$/i.test(chapter.title.trim());
+    const chTitle = isMeaningful ? chapter.title.trim() : 'Chapter ' + chapter.number;
+
+    const startDrop = Math.round(contentH * 0.25); // 25% drop before heading
+
+    const chapterHeader =
+      '<div style="padding-top:' + startDrop + 'px;text-align:' + template.headingAlign + ';">'
+      + '<span style="display:block;font-family:' + template.headingFont + ';'
+      + 'font-size:' + chapNumPx + 'px;font-weight:' + template.headingWeight + ';'
+      + 'color:' + template.accentColor + ';letter-spacing:0.18em;'
+      + 'text-transform:uppercase;margin-bottom:0.55em;">Chapter ' + chapter.number + '</span>'
+      + (isMeaningful
+          ? '<div style="font-family:' + template.headingFont + ';font-size:' + headPx + 'px;'
+            + 'font-weight:' + template.headingWeight + ';color:' + template.headingColor + ';'
+            + 'text-transform:' + template.headingTransform + ';line-height:1.2;'
+            + 'margin-bottom:1.4em;">' + escapeHtml(chTitle) + '</div>'
+          : '<div style="margin-bottom:1.4em;"></div>')
+      + '</div>';
+
+    // Estimated lines consumed by the header block
+    const headerLines = Math.round(startDrop / (bodyPx * lineH))
+      + (isMeaningful ? Math.ceil((headPx * 1.2) / (bodyPx * lineH)) + 1 : 0)
+      + 3;
+
+    // Split chapter HTML content into individual <p> blocks
+    const rawParas = chapter.content
+      .split(/(?<=<\/p>)/)
+      .map((s: string) => s.trim())
+      .filter(Boolean);
+
+    let pageContent   = chapterHeader;
+    let linesUsed     = headerLines;
+    let isChapterPage = true;
+    let isFirstPara   = true;
+
+    for (const paraHtml of rawParas) {
+      // Section break
+      const plainText = paraHtml.replace(/<[^>]*>/g, '').trim();
+      const isSectionBreak = /class="section-break"/.test(paraHtml)
+        || /^[*\-~]{1,3}$/.test(plainText);
+      if (isSectionBreak) {
+        pageContent +=
+          '<div style="text-align:center;margin:' + Math.round(bodyPx * 0.9) + 'px 0;'
+          + 'color:' + template.accentColor + ';font-size:' + bodyPx + 'px;opacity:0.55;">'
+          + '* * *</div>';
+        linesUsed += 1.2;
+        continue;
+      }
+
+      // Extract inner HTML (preserves <em> <strong> etc.)
+      const innerMatch = paraHtml.match(/<p[^>]*>([\s\S]*?)<\/p>/);
+      if (!innerMatch) continue;
+      const innerHtml = innerMatch[1];
+      const textLen   = innerHtml.replace(/<[^>]*>/g, '').length;
+      const paraCost  = Math.max(1, Math.ceil(textLen / charsPerLine))
+        + (template.paragraphStyle === 'spaced' ? 0.7 : 0);
+
+      // Flush when page is full (always keep at least 1 para on chapter-start page)
+      if (linesUsed > headerLines && linesUsed + paraCost > linesPerPage) {
+        addPage(pageContent, { isChapterStart: isChapterPage, chapterTitle: chTitle });
+        isChapterPage = false;
+        pageContent   = '';
+        linesUsed     = 0;
+      }
+
+      // First paragraph after chapter heading: no indent (publishing standard)
+      const indent = template.paragraphStyle === 'indent' && !isFirstPara
+        ? Math.round(bodyPx * 1.8) + 'px'
+        : '0';
+      const mb = template.paragraphStyle === 'spaced'
+        ? Math.round(bodyPx * 0.65) + 'px'
+        : '0';
+
+      pageContent +=
+        '<p style="margin:0 0 ' + mb + ';padding:0;text-indent:' + indent + ';'
+        + 'font-family:' + template.bodyFont + ';font-size:' + bodyPx + 'px;'
+        + 'line-height:' + lineH + ';color:' + template.inkColor + ';">'
+        + innerHtml + '</p>';
+      linesUsed  += paraCost;
+      isFirstPara = false;
+    }
+
+    // Last (or only) page of chapter
+    if (pageContent) {
+      addPage(pageContent, { isChapterStart: isChapterPage, chapterTitle: chTitle });
+    }
+  }
+
+  // ---- Assemble final HTML ------------------------------------------
+  const gfUrl = 'https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400'
+    + '&family=Playfair+Display:ital,wght@0,400;0,700;1,400'
+    + '&family=Lora:ital,wght@0,400;0,600;1,400'
+    + '&family=Merriweather:ital,wght@0,300;0,400;1,300'
+    + '&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400'
+    + '&family=Inter:wght@400;600;700&display=swap';
+
+  return '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n'
+    + '<title>' + escapeHtml(bookData.title) + '</title>\n'
+    + '<style>\n'
+    + '  @import url("' + gfUrl + '");\n'
+    + '  * { box-sizing: border-box; margin: 0; padding: 0; }\n'
+    + '  @page { size: ' + pageSize + '; margin: 0; }\n'
+    + '  html, body { margin: 0; padding: 0; background: #fff; }\n'
+    + '  .book-page { display: block; }\n'
+    + '</style>\n</head>\n<body>\n'
+    + allPages.join('\n')
+    + '\n</body>\n</html>';
 }
-
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
