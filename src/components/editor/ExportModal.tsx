@@ -163,8 +163,7 @@ export default function ExportModal({
         zip.file(`${slug}.epub`, blob);
       }
       if (needsPdf) {
-        const pdfBlob = await generatePdfBlob(bookData, template, pages, trimSize, { dropCaps, hideChapterNumbers });
-        zip.file(`${slug}.pdf`, pdfBlob);
+        generatePdfPrint(bookData, template, pages, trimSize, { dropCaps, hideChapterNumbers });
       }
       if (needsDocx) {
         const { generateDocx } = await import('@/lib/docx-export');
@@ -215,10 +214,9 @@ export default function ExportModal({
         zip.file(`${slug}.docx`, blob);
       }
 
-      // ── PDF (via jsPDF + html2canvas)
+      // ── PDF (vector, via browser print dialog)
       if (pdfSelected) {
-        const pdfBlob = await generatePdfBlob(bookData, template, pages, trimSize, { dropCaps, hideChapterNumbers });
-        zip.file(`${slug}.pdf`, pdfBlob);
+        generatePdfPrint(bookData, template, pages, trimSize, { dropCaps, hideChapterNumbers });
       }
 
       // ── README
@@ -1254,6 +1252,8 @@ function buildPrintHTML(
       ? '<p style="' + cpxGap + '">Unless otherwise noted, scripture quotations are from the Holy Bible. All rights reserved.</p>'
       : '';
 
+    const isbnPb = bookData.isbn ? escapeHtml(bookData.isbn) : '978-0-000000-00-0';
+
     addPage(
       // Content sits in the bottom third — standard copyright placement
       '<div style="position:absolute;bottom:' + Math.round(contentH * 0.06) + 'px;'
@@ -1271,7 +1271,7 @@ function buildPrintHTML(
 
       + disclaimer
 
-      + '<p style="' + cpxSmGap + '">ISBN: 978-0-000000-00-0 (Paperback)</p>'
+      + '<p style="' + cpxSmGap + '">ISBN: ' + isbnPb + ' (Paperback)</p>'
       + '<p style="' + cpxGap + '">ISBN: 978-0-000000-01-7 (eBook)</p>'
 
       + '<p style="' + cpxSmGap + '">First Edition</p>'
@@ -1569,6 +1569,7 @@ function buildPrintHTML(
       if (dc) {
         pageContent +=
           '<p style="margin:0 0 ' + mb + ';padding:0;text-indent:0;overflow:hidden;'
+          + 'text-align:justify;hyphens:auto;-webkit-hyphens:auto;orphans:2;widows:2;'
           + 'font-family:' + template.bodyFont + ';font-size:' + bodyPx + 'px;'
           + 'line-height:' + lineH + ';color:' + template.inkColor + ';">'
           + '<span style="float:left;font-family:' + template.headingFont + ';'
@@ -1579,6 +1580,7 @@ function buildPrintHTML(
       } else {
         pageContent +=
           '<p style="margin:0 0 ' + mb + ';padding:0;text-indent:' + indent + ';'
+          + 'text-align:justify;hyphens:auto;-webkit-hyphens:auto;orphans:2;widows:2;'
           + 'font-family:' + template.bodyFont + ';font-size:' + bodyPx + 'px;'
           + 'line-height:' + lineH + ';color:' + template.inkColor + ';">'
           + block.inner + '</p>';
@@ -1619,6 +1621,7 @@ function buildPrintHTML(
       const ind = template.paragraphStyle === 'indent' && !bmFirst ? Math.round(bodyPx * 1.8) + 'px' : '0';
       bContent +=
         '<p style="margin:0 0 ' + mb + ';padding:0;text-indent:' + ind + ';'
+        + 'text-align:justify;hyphens:auto;-webkit-hyphens:auto;orphans:2;widows:2;'
         + 'font-family:' + template.bodyFont + ';font-size:' + bodyPx + 'px;'
         + 'line-height:' + lineH + ';color:' + template.inkColor + ';">'
         + block.inner + '</p>';
@@ -1699,16 +1702,18 @@ function buildPrintHTML(
     + '&family=Merriweather:ital,wght@0,300;0,400;1,300'
     + '&family=Inter:wght@400;600;700&display=swap';
 
-  return '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n'
+  return '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
     + '<title>' + escapeHtml(bookData.title) + '</title>\n'
     + '<style>\n'
     + '  @import url("' + gfUrl + '");\n'
     + '  * { box-sizing: border-box; margin: 0; padding: 0; }\n'
     + '  @page { size: ' + pageSize + '; margin: 0; }\n'
     + '  html, body { margin: 0; padding: 0; background: #fff; }\n'
-    + '  .book-page { display: block; }\n'
+    + '  .book-page { display: block; break-after: page; page-break-after: always; }\n'
+    + '  .book-page:last-child { break-after: avoid; page-break-after: avoid; }\n'
     + '</style>\n</head>\n<body>\n'
     + allPages.join('\n')
+    + '\n<script>window.onload=function(){window.print();}</script>'
     + '\n</body>\n</html>';
 }
 function escapeHtml(str: string): string {
@@ -1720,65 +1725,25 @@ function escapeHtml(str: string): string {
 }
 
 // ─────────────────────────────────────────
-//  PDF BLOB GENERATOR (jsPDF + html2canvas)
+//  PDF GENERATOR (vector, browser print)
 // ─────────────────────────────────────────
 
-async function generatePdfBlob(
+function generatePdfPrint(
   bookData: BookData,
   template: ReturnType<typeof getTemplate>,
   pages: BookPage[],
   trimSize: string,
   options: { dropCaps: boolean; hideChapterNumbers: boolean } = { dropCaps: true, hideChapterNumbers: false }
-): Promise<Blob> {
-  const { default: jsPDF } = await import('jspdf');
-  const { default: html2canvas } = await import('html2canvas');
-
-  // Trim size → inches → points (1in = 72pt)
-  const TRIM_PX: Record<string, [number, number]> = {
-    '5x8':     [360, 576],
-    '5.5x8.5': [396, 612],
-    '6x9':     [432, 648],
-    'digest':  [364.3, 562.3],
-    'mass':    [306, 494.6],
-    'a5':      [419.5, 595.3],
-    '7x10':    [504, 720],
-    '8.5x11':  [612, 792],
-  };
-  const [ptW, ptH] = TRIM_PX[trimSize] ?? [432, 648];
-
-  // Render the book HTML into a hidden off-screen container
-  const printHtml = buildPrintHTML(bookData, template, pages, trimSize, options);
-
-  const container = document.createElement('div');
-  container.style.cssText = `position:fixed;left:-9999px;top:0;width:${ptW * (96/72)}px;background:#fff;`;
-  container.innerHTML = printHtml;
-  document.body.appendChild(container);
-
-  // Wait for fonts / images
-  await new Promise(r => setTimeout(r, 800));
-
-  const pdf = new jsPDF({ unit: 'pt', format: [ptW, ptH], orientation: 'portrait' });
-
-  // Capture each "page" div separately
-  const pageDivs = container.querySelectorAll<HTMLElement>('.book-page, .front-page');
-  const elements = pageDivs.length > 0 ? Array.from(pageDivs) : [container];
-
-  for (let i = 0; i < elements.length; i++) {
-    if (i > 0) pdf.addPage([ptW, ptH]);
-    const canvas = await html2canvas(elements[i] as HTMLElement, {
-      scale: 3,
-      useCORS: true,
-      backgroundColor: template.paperColor || '#ffffff',
-      logging: false,
-      imageTimeout: 0,
-      removeContainer: true,
-    });
-    const imgData = canvas.toDataURL('image/png');
-    pdf.addImage(imgData, 'PNG', 0, 0, ptW, ptH);
+): void {
+  const html = buildPrintHTML(bookData, template, pages, trimSize, options);
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank', 'noopener');
+  if (!win) {
+    alert('Pop-ups are blocked. Please allow pop-ups for this site, then try again.');
   }
-
-  document.body.removeChild(container);
-  return pdf.output('blob');
+  // URL is revoked once the new window has loaded the blob
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 // ─────────────────────────────────────────

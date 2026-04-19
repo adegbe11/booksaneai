@@ -200,6 +200,12 @@ p {
   margin: 0;
   text-indent: ${template.paragraphStyle === 'indent' ? template.textIndent : '0'};
   margin-bottom: ${template.paragraphStyle === 'spaced' ? template.paragraphSpacing : '0'};
+  text-align: justify;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  -epub-hyphens: auto;
+  orphans: 2;
+  widows: 2;
 }
 p + p {
   margin-top: ${template.paragraphStyle === 'indent' ? '0' : template.paragraphSpacing};

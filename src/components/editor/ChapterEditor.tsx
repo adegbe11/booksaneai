@@ -241,13 +241,50 @@ function TitlePageView({ bookData }: { bookData: BookData | null }) {
   );
 }
 
-function CopyrightView({ bookData }: { bookData: BookData | null }) {
+function CopyrightView({ bookData, onUpdateSection }: { bookData: BookData | null; onUpdateSection?: (field: string, value: string) => void }) {
   const year = new Date().getFullYear();
   return (
     <div style={{ padding: '40px 40px', fontFamily: 'Georgia, serif', color: '#555', fontSize: 12, lineHeight: 1.8 }}>
-      <p>Copyright © {year} {bookData?.author || 'the author'}. All rights reserved.</p>
-      <p style={{ marginTop: 12 }}>No part of this publication may be reproduced, distributed, or transmitted in any form or by any means, including photocopying, recording, or other electronic or mechanical methods, without the prior written permission of the publisher.</p>
-      <p style={{ marginTop: 12 }}>First Edition</p>
+      <p>Copyright &copy; {year} {bookData?.author || 'the author'}. All rights reserved.</p>
+      <p style={{ marginTop: 12 }}>No part of this publication may be reproduced, distributed, or transmitted in any form or by any means without the prior written permission of the publisher.</p>
+      <p style={{ marginTop: 12 }}>First Edition. Printed in the United States of America.</p>
+
+      <div style={{ marginTop: 24, borderTop: '1px solid #eee', paddingTop: 20 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#999', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>
+          ISBN (optional)
+        </div>
+        <input
+          type="text"
+          defaultValue={bookData?.isbn || ''}
+          placeholder="e.g. 978-1-234567-89-0"
+          onBlur={(e) => onUpdateSection?.('isbn', e.currentTarget.value.trim())}
+          style={{
+            width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: 6,
+            fontFamily: 'Georgia, serif', fontSize: 13, color: '#333', outline: 'none',
+            background: '#fafafa',
+          }}
+        />
+        <p style={{ marginTop: 6, fontSize: 11, color: '#aaa' }}>
+          Your ISBN will appear on the copyright page. Leave blank to use a placeholder.
+        </p>
+      </div>
+
+      <div style={{ marginTop: 20 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#999', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>
+          Back Cover Blurb (optional)
+        </div>
+        <textarea
+          defaultValue={bookData?.backCoverBlurb || ''}
+          placeholder="Write your back cover description here. This appears on the back of your book."
+          onBlur={(e) => onUpdateSection?.('backCoverBlurb', e.currentTarget.value.trim())}
+          rows={5}
+          style={{
+            width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: 6,
+            fontFamily: 'Georgia, serif', fontSize: 13, color: '#333', outline: 'none',
+            background: '#fafafa', resize: 'vertical', lineHeight: 1.6,
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -532,7 +569,7 @@ export default function ChapterEditor({
       case 'title-page':
         return <TitlePageView bookData={bookData} />;
       case 'copyright':
-        return <CopyrightView bookData={bookData} />;
+        return <CopyrightView bookData={bookData} onUpdateSection={onUpdateSection} />;
       case 'dedication':
         return <DedicationView bookData={bookData} onUpdateSection={onUpdateSection} />;
       case 'epigraph':

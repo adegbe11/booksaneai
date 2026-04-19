@@ -351,6 +351,10 @@ export function buildCopyrightPage(bookData: BookData, template: Template): stri
     ? `<p style="margin:0 0 0.55em;">Unless otherwise noted, scripture quotations are from the Holy Bible. All rights reserved.</p>`
     : '';
 
+  // Use real ISBN if provided, otherwise show placeholder
+  const isbnPb  = bookData.isbn ? bookData.isbn : '978-0-000000-00-0';
+  const isbnEb  = '978-0-000000-01-7';
+
   return `
     <div style="
       display:flex;flex-direction:column;justify-content:flex-end;
@@ -371,8 +375,8 @@ export function buildCopyrightPage(bookData: BookData, template: Template): stri
 
         ${disclaimer}
 
-        <p style="margin:0 0 0.3em;">ISBN: 978-0-000000-00-0 (Paperback)</p>
-        <p style="margin:0 0 0.8em;">ISBN: 978-0-000000-01-7 (eBook)</p>
+        <p style="margin:0 0 0.3em;">ISBN: ${isbnPb} (Paperback)</p>
+        <p style="margin:0 0 0.8em;">ISBN: ${isbnEb} (eBook)</p>
 
         <p style="margin:0 0 0.3em;">First Edition</p>
         <p style="margin:0 0 0.8em;">Printed in the United States of America</p>
@@ -1083,7 +1087,7 @@ function wrapParagraph(template: Template, paraHtml: string, isFirst: boolean): 
   // Replace bare <p> with styled one
   return paraHtml.replace(
     /^<p([^>]*)>/,
-    `<p$1 style="margin:0 0 ${mb};padding:0;text-indent:${indent};font-family:${template.bodyFont};font-size:${PREVIEW_FONT};line-height:${PREVIEW_LH};color:${template.inkColor};">`
+    `<p$1 style="margin:0 0 ${mb};padding:0;text-indent:${indent};text-align:justify;hyphens:auto;-webkit-hyphens:auto;orphans:2;widows:2;font-family:${template.bodyFont};font-size:${PREVIEW_FONT};line-height:${PREVIEW_LH};color:${template.inkColor};">`
   );
 }
 

@@ -32,6 +32,8 @@ export interface BookData {
   epigraphAttribution?: string;
   acknowledgments?: string;
   aboutAuthor?: string;
+  isbn?: string;
+  backCoverBlurb?: string;
   chapters: BookChapter[];
   extras?: Record<string, string>; // content for any added element by type key
   metadata: {

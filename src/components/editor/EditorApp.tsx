@@ -486,7 +486,7 @@ export default function EditorApp({ initialText = '', initialFilename = '', init
 
   // ─── section field update ───
   // Known top-level fields update directly; everything else goes into bookData.extras
-  const KNOWN_FIELDS = new Set(['title', 'author', 'subtitle', 'dedication', 'epigraph', 'epigraphAttribution', 'acknowledgments', 'aboutAuthor']);
+  const KNOWN_FIELDS = new Set(['title', 'author', 'subtitle', 'dedication', 'epigraph', 'epigraphAttribution', 'acknowledgments', 'aboutAuthor', 'isbn', 'backCoverBlurb']);
   const handleUpdateSection = useCallback((field: string, value: string) => {
     setBookData(prev => {
       if (!prev) return prev;
