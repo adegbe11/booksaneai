@@ -179,6 +179,9 @@ p + p {
 h1 + p, h2 + p, h3 + p, .chapter-start + p {
   text-indent: 0;
 }
+.chapter-body p:first-child {
+  text-indent: 0;
+}
 .chapter-start {
   padding-top: 3em;
 }
@@ -221,12 +224,25 @@ function applyDropCap(content: string, template: Template): string {
   });
 }
 
+function epubChNum(n: number, style: string): string {
+  if (style === 'roman') {
+    const v=[1000,900,500,400,100,90,50,40,10,9,5,4,1],s=['M','CM','D','CD','C','XC','L','XL','X','IX','V','IV','I'];
+    let r=''; for(let i=0;i<v.length;i++) while(n>=v[i]){r+=s[i];n-=v[i];} return r;
+  }
+  const SP=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten',
+    'Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen','Twenty'];
+  if (style === 'spelled') return n < SP.length ? SP[n] : String(n);
+  return String(n);
+}
+
 function buildChapterXHTML(
   chapter: { id: string; number: number; title: string; content: string },
   template: Template
 ): string {
-  const numDisplay = template.chapterNumberStyle !== 'none'
-    ? `<span class="chapter-number">Chapter ${chapter.number}</span>`
+  const numStyle  = template.chapterNumberStyle || 'numeral';
+  const numLabel  = numStyle === 'numeral' ? `Chapter ${chapter.number}` : epubChNum(chapter.number, numStyle);
+  const numDisplay = numStyle !== 'none'
+    ? `<span class="chapter-number">${numLabel}</span>`
     : '';
 
   return `<?xml version="1.0" encoding="UTF-8"?>

@@ -200,6 +200,18 @@ export async function generateDocx(bookData: BookData, template: Template): Prom
     }
   }
 
+  // ── Chapter number formatter (inline, no import needed)
+  const fmtChNum = (n: number, style: string): string => {
+    if (style === 'roman') {
+      const v=[1000,900,500,400,100,90,50,40,10,9,5,4,1],s=['M','CM','D','CD','C','XC','L','XL','X','IX','V','IV','I'];
+      let r=''; for(let i=0;i<v.length;i++) while(n>=v[i]){r+=s[i];n-=v[i];} return r;
+    }
+    const SP=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten',
+      'Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen','Twenty'];
+    if (style === 'spelled') return n < SP.length ? SP[n] : String(n);
+    return String(n);
+  };
+
   // ── CHAPTERS
   const useIndent = template.paragraphStyle === 'indent';
   for (const chapter of bookData.chapters) {
@@ -208,10 +220,14 @@ export async function generateDocx(bookData: BookData, template: Template): Prom
     children.push(new Paragraph({ text: '', spacing: { before: 1440 } }));
 
     // Chapter number
-    if (template.chapterNumberStyle !== 'none') {
+    const numStyle = template.chapterNumberStyle || 'numeral';
+    if (numStyle !== 'none') {
+      const numLabel = numStyle === 'numeral'
+        ? `Chapter ${chapter.number}`
+        : fmtChNum(chapter.number, numStyle);
       children.push(
         new Paragraph({
-          text: `Chapter ${chapter.number}`,
+          text: numLabel,
           heading: HeadingLevel.HEADING_2,
           alignment: AlignmentType.CENTER,
           spacing: { after: 120 },

@@ -922,6 +922,21 @@ export default function ExportModal({
 //  PDF HTML BUILDER
 // ─────────────────────────────────────────
 
+// ── Drop cap: extract first text character from HTML safely ──────────
+// naive `str.replace(letter, '')` breaks tag names; this walks the string.
+function extractDropCapLetter(html: string): { letter: string; rest: string } | null {
+  let inTag = false;
+  for (let i = 0; i < html.length; i++) {
+    const ch = html[i];
+    if (ch === '<') { inTag = true; continue; }
+    if (ch === '>') { inTag = false; continue; }
+    if (!inTag && ch.trim()) {
+      return { letter: ch, rest: html.slice(0, i) + html.slice(i + 1) };
+    }
+  }
+  return null;
+}
+
 // Roman numerals
 function toRomanNumeral(n: number): string {
   const vals = [1000,900,500,400,100,90,50,40,10,9,5,4,1];
@@ -1230,10 +1245,9 @@ function buildPrintHTML(
         ? Math.round(bodyPx * 0.65) + 'px' : '0';
 
       // Drop cap on first paragraph of each chapter
-      if (options.dropCaps && isFirstPara && plainText.length > 0) {
-        const firstChar  = block.inner.replace(/^(<[^>]*>)*/, ''); // skip leading tags
-        const firstLetter = firstChar.replace(/<[^>]*>/g, '').charAt(0);
-        const afterLetter = block.inner.replace(firstLetter, '');
+      const dc = (options.dropCaps && isFirstPara && plainText.length > 0)
+        ? extractDropCapLetter(block.inner) : null;
+      if (dc) {
         pageContent +=
           '<p style="margin:0 0 ' + mb + ';padding:0;text-indent:0;overflow:hidden;'
           + 'font-family:' + template.bodyFont + ';font-size:' + bodyPx + 'px;'
@@ -1241,8 +1255,8 @@ function buildPrintHTML(
           + '<span style="float:left;font-family:' + template.headingFont + ';'
           + 'font-size:' + dropCapPx + 'px;font-weight:700;'
           + 'line-height:0.82;padding-right:4px;margin-top:4px;color:' + template.accentColor + ';">'
-          + escapeHtml(firstLetter) + '</span>'
-          + afterLetter + '</p>';
+          + escapeHtml(dc.letter) + '</span>'
+          + dc.rest + '</p>';
       } else {
         pageContent +=
           '<p style="margin:0 0 ' + mb + ';padding:0;text-indent:' + indent + ';'
@@ -1261,11 +1275,16 @@ function buildPrintHTML(
   }
 
   // ---- Assemble final HTML ------------------------------------------
+  // All fonts used across all 8 templates
   const gfUrl = 'https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400'
-    + '&family=Playfair+Display:ital,wght@0,400;0,700;1,400'
-    + '&family=Lora:ital,wght@0,400;0,600;1,400'
+    + '&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400'   // Knopf
+    + '&family=Playfair+Display:ital,wght@0,400;0,700;1,400'     // Scribner, Ballantine
+    + '&family=Lora:ital,wght@0,400;0,600;1,400'                 // Scribner, Ballantine
+    + '&family=Cinzel:wght@400;600'                              // Tor
+    + '&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400'   // Vintage, Penguin, Anchor
+    + '&family=Josefin+Sans:wght@300;400;600'                   // Vintage
+    + '&family=Raleway:wght@200;300;400;600'                    // Penguin Modern
     + '&family=Merriweather:ital,wght@0,300;0,400;1,300'
-    + '&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400'
     + '&family=Inter:wght@400;600;700&display=swap';
 
   return '<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n'
