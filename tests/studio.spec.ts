@@ -26,6 +26,8 @@ test('author workflow: edit, save, reopen, checkpoint, publish, and restore', as
   await expect(page.getByLabel('Chapter content')).toContainText('A sentence that must survive reopening.');
   await page.getByRole('button', { name: 'Design', exact: true }).click();
   await expect(page.getByText(/measured pages/)).toBeVisible({ timeout: 60000 });
+  await expect(page.locator('iframe[title="Book spread"]')).toBeVisible();
+  await page.getByRole('tab', { name: 'Print' }).click();
   const frame = page.frameLocator('iframe[title="Measured book preview"]');
   await expect(frame.locator('.pagedjs_page')).not.toHaveCount(0);
   const previewPages = await frame.locator('.pagedjs_page').count();
@@ -158,7 +160,6 @@ test('first-book onboarding explains choices, creates a named book, and provides
   await expect(page.getByRole('button', { name: 'Modern theme' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByText(/measured pages/)).toBeVisible({ timeout: 60000 });
   await page.screenshot({ path: 'artifacts/onboarding-design.png', fullPage: true });
-  await page.getByText('Customise this theme', { exact: true }).click();
   await expect(page.getByLabel('Type size')).toBeVisible();
 });
 
