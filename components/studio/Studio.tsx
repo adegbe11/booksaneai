@@ -1,0 +1,179 @@
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import type { JSONContent } from '@tiptap/core';
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, BookOpen, Check, ChevronRight, Download, FileText, FolderOpen, LayoutTemplate, Loader2, Plus, Search, Settings2, ShieldCheck, Upload, X, Bold, Italic, List, Quote, Undo2, Redo2, Table2, Minus, Copy, Trash2, History, Eye, PenLine, ImagePlus } from 'lucide-react';
+import { studioExtensions } from '@/lib/studio/extensions';
+import { documentHtml, documentText, newProject, newSection, projectWords, studioChecks, words, type StudioProject, type StudioSection } from '@/lib/studio/model';
+import { listProjects, saveProject, projectSnapshots, type ProjectSnapshot } from '@/lib/studio/store';
+import { importFile, migrateRecent } from '@/lib/studio/import';
+import { printHtml, studioEpub } from '@/lib/studio/publication';
+import type { RecentBook } from '@/types';
+import { StartingChoices, BookSetup, ImportWelcome, WorkflowHelp, ContextGuide } from './FirstBook';
+import { DesignControls, ThemeGallery, TrimSelect } from './DesignControls';
+import './studio.css';
+
+function download(blob: Blob, name: string) { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 10000); }
+function filename(project: StudioProject) { return project.title.replace(/[^\p{L}\p{N} _-]/gu, '').trim().replace(/\s+/g, '-') || 'book'; }
+function Logo() { return <span className="studio-logo"><span className="logo-symbol"><BookOpen size={19}/></span>booksane<span className="studio-label">STUDIO</span></span>; }
+
+export default function Studio() {
+  const [projects, setProjects] = useState<StudioProject[]>([]);
+  const [project, setProject] = useState<StudioProject | null>(null);
+  const [selectedId, setSelectedId] = useState('');
+  const [mode, setMode] = useState<'write' | 'design'>('write');
+  const [panel, setPanel] = useState<'details' | 'checks' | 'history'>('details');
+  const [saveState, setSaveState] = useState('');
+  const [notice, setNotice] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
+  const [query, setQuery] = useState('');
+  const [exportOpen, setExportOpen] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [guideVisible, setGuideVisible] = useState(true);
+  const [sampleActive, setSampleActive] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [snapshots, setSnapshots] = useState<ProjectSnapshot[]>([]);
+  const [editorEpoch, setEditorEpoch] = useState(0);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const latest = useRef<StudioProject | null>(null);
+  const snapshotTime = useRef(0);
+
+  useEffect(() => {
+    const protect = (event: BeforeUnloadEvent) => { if (latest.current && saveState !== 'Saved on this device') { event.preventDefault(); event.returnValue = ''; } };
+    window.addEventListener('beforeunload', protect);
+    return () => window.removeEventListener('beforeunload', protect);
+  }, [saveState]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const all = await listProjects();
+        const legacy = JSON.parse(localStorage.getItem('booksane_recent') || '[]') as RecentBook[];
+        if (Array.isArray(legacy)) for (const book of legacy) {
+          if (book.bookData && !all.some(p => p.id === `legacy-${book.id}`)) { const recovered = migrateRecent(book); await saveProject(recovered, true); all.push(recovered); }
+        }
+        if (alive) setProjects(all.sort((a, b) => b.updatedAt - a.updatedAt));
+      } catch { if (alive) setNotice('Local storage is unavailable. Download a project backup before leaving.'); }
+      finally { if (alive) setLoading(false); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    latest.current = project;
+    if (!project) return;
+    setSaveState('Saving…');
+    const timer = setTimeout(async () => {
+      try {
+        const checkpoint = Date.now() - snapshotTime.current > 30000;
+        await saveProject(project, checkpoint);
+        if (checkpoint) snapshotTime.current = Date.now();
+        if (latest.current?.id === project.id && latest.current.revision === project.revision) setSaveState('Saved on this device');
+        setProjects(prev => [project, ...prev.filter(p => p.id !== project.id)]);
+      } catch (error) { setSaveState('Save failed'); setNotice(error instanceof Error ? error.message : 'Could not save. Download a project backup.'); }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [project]);
+
+  const change = useCallback((update: (p: StudioProject) => StudioProject) => setProject(prev => prev ? { ...update(prev), revision: prev.revision + 1, updatedAt: Date.now() } : prev), []);
+  function open(p: StudioProject) { setProject(p); latest.current = p; setSampleActive(false); try { setGuideVisible(localStorage.getItem(`booksane-guide-hidden-${p.id}`) !== 'yes'); } catch { setGuideVisible(true); } setSelectedId(p.sections.find(s => s.kind === 'chapter')?.id || p.sections[0]?.id || ''); setEditorEpoch(e => e + 1); setMode('write'); setPanel('details'); snapshotTime.current = 0; }
+  async function back() { if (project) { try { await saveProject(project, true); } catch { setNotice('Saving failed. Download your project before closing.'); return; } } setProject(null); latest.current = null; }
+  async function handleFile(file?: File) {
+    if (!file) return; setImporting(true);
+    try { const imported = await importFile(file); open(imported); setImportOpen(false); setReportOpen(!!imported.importReport); }
+    catch (error) { setNotice(error instanceof Error ? error.message : 'Could not import this file.'); }
+    finally { setImporting(false); if (fileRef.current) fileRef.current.value = ''; }
+  }
+  const selected = project?.sections.find(s => s.id === selectedId);
+  const findings = project ? studioChecks(project) : [];
+  const add = (kind: StudioSection['kind']) => { const section = newSection(kind, kind === 'chapter' ? `Chapter ${(project?.sections.filter(s => s.kind === 'chapter').length || 0) + 1}` : kind === 'frontmatter' ? 'Dedication' : 'Acknowledgments'); change(p => { const order = { frontmatter: 0, chapter: 1, backmatter: 2 }; const sections = [...p.sections]; const index = sections.findIndex(s => order[s.kind] > order[kind]); sections.splice(index < 0 ? sections.length : index, 0, section); return { ...p, sections }; }); setSelectedId(section.id); };
+  function move(direction: number) { change(p => { const sections = [...p.sections]; const i = sections.findIndex(s => s.id === selectedId); const next = i + direction; if (next < 0 || next >= sections.length || sections[next].kind !== sections[i].kind) return p; [sections[i], sections[next]] = [sections[next], sections[i]]; return { ...p, sections }; }); }
+  async function history() { setPanel('history'); if (project) { try { setSnapshots(await projectSnapshots(project.id)); } catch { setNotice('Could not load version history.'); } } }
+
+  return <div className={`booksane-studio workspace-mode-${mode}`}>
+    <input ref={fileRef} type="file" accept=".docx,.txt,.booksane,.json" hidden onChange={e => void handleFile(e.target.files?.[0])}/>
+    {notice && <div className="studio-notice" role="alert"><span>{notice}</span><button aria-label="Dismiss message" onClick={() => setNotice('')}><X size={16}/></button></div>}
+    {setupOpen && <BookSetup close={() => setSetupOpen(false)} create={(title, author) => { const book = newProject(); book.title = title; book.author = author; setSetupOpen(false); open(book); }}/>} 
+    {importOpen && <ImportWelcome busy={importing} close={() => setImportOpen(false)} choose={() => fileRef.current?.click()} importFile={file => void handleFile(file)}/>}
+    {!project ? <>
+      <header className="library-header"><Logo/><span className="device-note"><span className="status-dot"/>Write → Design → Export</span><a href="/">About Booksane <ArrowRight size={14}/></a></header>
+      <main className="library-main">
+        <StartingChoices returning={projects.length > 0} create={() => setSetupOpen(true)} importBook={() => setImportOpen(true)} sample={() => { open(newProject(true)); setSampleActive(true); }}/>
+        <div className="library-section-heading"><div><h2>Your library <span>{projects.length}</span></h2><p>Saved in this browser on this device.</p></div><label className="library-search"><Search size={15}/><input aria-label="Search books" placeholder="Find a book…" value={query} onChange={e => setQuery(e.target.value)}/></label></div>
+        {loading ? <p className="loading-line"><Loader2 size={18} className="spin"/> Opening your library…</p> : <div className="project-grid">{projects.filter(p => `${p.title} ${p.author}`.toLowerCase().includes(query.toLowerCase())).map(p => <button key={p.id} className="project-card" onClick={() => open(p)}><div className={`mini-cover ${p.design.theme}`}><span>BOOKSANE MANUSCRIPT</span><h3>{p.title}</h3><small>{p.author || 'Your name here'}</small></div><div className="project-card-info"><h3>{p.title}</h3><p>{projectWords(p).toLocaleString()} words · {p.sections.length} sections</p><span>Edited {new Date(p.updatedAt).toLocaleDateString()}</span></div><ArrowRight size={17}/></button>)}</div>}
+        <footer className="library-footer"><span><ShieldCheck size={15}/>Saved locally. Portable by design.</span><span>Project files belong to you. Keep a backup for safekeeping.</span></footer>
+      </main>
+    </> : <>
+      <header className="workspace-header"><button className="icon-button" aria-label="Back to library" onClick={() => void back()}><ArrowLeft size={18}/></button><Logo/><span className="header-divider"/><div className="header-book-title">{project.title}<span className="save-label"><span className={`status-dot ${saveState === 'Save failed' ? 'error' : ''}`}/>{saveState}</span></div><div className="workspace-modes"><button className={mode === 'write' ? 'active' : ''} onClick={() => setMode('write')}><PenLine size={14}/>Write</button><button className={mode === 'design' ? 'active' : ''} onClick={() => { setMode('design'); setPanel('details'); }}><LayoutTemplate size={14}/>Design</button></div><button className="workspace-help icon-button" aria-label="Getting started help" title="Getting started help" onClick={() => setHelpOpen(true)}><BookOpen size={17}/></button><button className="primary export-trigger" onClick={() => setExportOpen(true)}><Download size={15}/>Export book</button></header>
+      <div className="workspace-body">
+        <aside className="book-navigator"><div className="navigator-heading"><span className="eyebrow">MANUSCRIPT</span><span>{project.sections.length}</span></div>
+          {(['frontmatter', 'chapter', 'backmatter'] as const).map(kind => <div className="section-group" key={kind}><div className="group-label">{kind === 'chapter' ? 'Chapters' : kind === 'frontmatter' ? 'Front matter' : 'Back matter'}<button aria-label={`Add ${kind}`} onClick={() => add(kind)}><Plus size={14}/></button></div>{project.sections.filter(s => s.kind === kind).map(s => <button className={`section-item ${selectedId === s.id ? 'selected' : ''}`} onClick={() => setSelectedId(s.id)} key={s.id}><FileText size={14}/><span>{s.title}</span><small>{words(documentText(s.document))}</small></button>)}</div>)}
+          <div className="navigator-bottom"><span>{projectWords(project).toLocaleString()}<small>total words</small></span><button onClick={() => setPanel('checks')}><ShieldCheck size={16}/>Book review <span>{findings.length}</span></button>{project.importReport && <button onClick={() => setReportOpen(true)}><Upload size={15}/>Import report</button>}</div>
+        </aside>
+        <main className="studio-canvas">
+          {guideVisible && <ContextGuide mode={mode} hasWords={projectWords(project) > 0} sample={sampleActive} hide={() => { setGuideVisible(false); try { localStorage.setItem(`booksane-guide-hidden-${project.id}`, 'yes'); } catch {} }} help={() => setHelpOpen(true)} next={() => { if (mode === 'write') { setMode('design'); setPanel('details'); } else setExportOpen(true); }}/>}
+          {mode === 'write' ? selected ? <><div className="canvas-breadcrumb"><span>{project.title}</span><ChevronRight size={13}/><span>{selected.title}</span><div className="section-tools"><button aria-label="Move section up" onClick={() => move(-1)}><ArrowUp size={14}/></button><button aria-label="Move section down" onClick={() => move(1)}><ArrowDown size={14}/></button><button aria-label="Duplicate section" onClick={() => { const duplicate = { ...selected, id: crypto.randomUUID(), title: `${selected.title} (copy)` }; change(p => { const sections = [...p.sections]; sections.splice(sections.findIndex(s => s.id === selected.id) + 1, 0, duplicate); return { ...p, sections }; }); setSelectedId(duplicate.id); }}><Copy size={14}/></button><button aria-label="Delete section" disabled={project.sections.length <= 1} onClick={() => { if (!window.confirm(`Delete “${selected.title}”? Saved versions remain in history.`)) return; const next = project.sections.filter(s => s.id !== selected.id); change(p => ({ ...p, sections: next })); setSelectedId(next[0]?.id || ''); }}><Trash2 size={14}/></button></div></div>
+            <ManuscriptEditor key={`${selected.id}-${editorEpoch}`} section={selected} onTitle={title => change(p => ({ ...p, sections: p.sections.map(s => s.id === selected.id ? { ...s, title } : s) }))} onDocument={document => change(p => ({ ...p, sections: p.sections.map(s => s.id === selected.id ? { ...s, document } : s) }))}/>
+          </> : <div className="no-section"><FileText size={28}/><h2>Your manuscript starts here.</h2><button className="primary" onClick={() => add('chapter')}>Add a chapter</button></div> : <BookPreview project={project} sectionId={selectedId}/>}
+          <div className="canvas-status"><span>{selected ? `${words(documentText(selected.document)).toLocaleString()} words in this section` : 'Book preview'}</span><span>{mode === 'write' ? 'Your manuscript, beautifully focused.' : 'Measured layout · local fonts'}</span></div>
+        </main>
+        <aside className="studio-inspector"><div className="inspector-tabs"><button className={panel === 'details' ? 'active' : ''} onClick={() => setPanel('details')}><Settings2 size={15}/>Details</button><button className={panel === 'checks' ? 'active' : ''} onClick={() => setPanel('checks')}><ShieldCheck size={15}/>Review</button><button aria-label="Version history" className={panel === 'history' ? 'active' : ''} onClick={() => void history()}><History size={15}/></button></div>
+          {panel === 'details' ? <div className="inspector-content"><div className="book-metadata"><span className="eyebrow">BOOK DETAILS</span><h2>Your book.</h2><p className="inspector-description">Use a working title. You can change these details at any time.</p><label>Book title<input aria-label="Book title" value={project.title} onChange={e => change(p => ({ ...p, title: e.target.value }))}/></label><label>Subtitle<input value={project.subtitle} onChange={e => change(p => ({ ...p, subtitle: e.target.value }))} placeholder="Optional"/></label><label>Author / pen name<input aria-label="Author name" value={project.author} onChange={e => change(p => ({ ...p, author: e.target.value }))} placeholder="Your name"/></label><label>Language<select value={project.language} onChange={e => change(p => ({ ...p, language: e.target.value }))}><option value="en">English</option><option value="fr">French</option><option value="es">Spanish</option><option value="de">German</option><option value="pt">Portuguese</option></select></label>
+            </div><div className="book-design-settings"><span className="eyebrow">BOOK DESIGN</span><h2>Find your book’s look.</h2><p className="inspector-description">Pick a theme. Your words stay the same.</p><ThemeGallery design={project.design} select={theme => change(p => ({ ...p, design: { ...p.design, theme } }))}/>
+            <TrimSelect design={project.design} change={design => change(p => ({ ...p, design }))}/><p className="design-field-help">The width and height of the printed book.</p><details className="advanced-design"><summary>Customise this theme</summary><DesignControls design={project.design} change={design => change(p => ({ ...p, design }))}/></details></div><button className="preview-link" onClick={() => setMode('design')}>Design & preview your book <ArrowRight size={14}/></button>
+          </div> : panel === 'checks' ? <div className="inspector-content"><div className="review-icon"><ShieldCheck size={26}/></div><h2>Review your manuscript.</h2><p className="inspector-description">Content checks for this revision. Export validation is a separate step.</p>{findings.length ? findings.map((f, i) => <button className={`finding ${f.level}`} key={i} onClick={() => { if (f.sectionId) { setSelectedId(f.sectionId); setMode('write'); } }}><span className="finding-dot"/>{f.message}{f.sectionId && <ChevronRight size={14}/>}</button>) : <div className="checks-good"><Check size={18}/>No content issues found.</div>}<div className="review-note"><strong>What we check</strong><p>Title, author, empty sections, and image descriptions. Printer approval and full EPUB accessibility require additional validation.</p></div><button className="secondary" onClick={() => setExportOpen(true)}>Review exports <ArrowRight size={14}/></button></div> : <div className="inspector-content"><span className="eyebrow">VERSION HISTORY</span><h2>Version history.</h2><p className="inspector-description">Up to ten local checkpoints. Restoring creates a new current revision.</p><button className="secondary" onClick={async () => { try { await saveProject(project, true); await history(); setNotice('Checkpoint saved.'); } catch { setNotice('Could not save a checkpoint. Download a project backup.'); } }}><Plus size={14}/>Save checkpoint</button>{snapshots.map(snapshot => <button className="snapshot" key={snapshot.id} onClick={() => { change(() => ({ ...snapshot.project, revision: project.revision, id: project.id })); setSelectedId(snapshot.project.sections[0]?.id || ''); setEditorEpoch(e => e + 1); setNotice('Version restored. Your next save creates a new revision.'); }}><History size={15}/><span>{new Date(snapshot.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}<small>{projectWords(snapshot.project).toLocaleString()} words · Revision {snapshot.project.revision}</small></span><Undo2 size={14}/></button>)}</div>}
+        </aside>
+      </div>
+      {helpOpen && <WorkflowHelp mode={mode} sample={sampleActive} close={() => setHelpOpen(false)} write={() => { setMode('write'); setGuideVisible(true); }} design={() => { setMode('design'); setPanel('details'); setGuideVisible(true); }} exportBook={() => setExportOpen(true)}/>}
+      {exportOpen && <ExportDialog project={project} close={() => setExportOpen(false)} notify={setNotice}/>}
+      {reportOpen && project.importReport && <div className="studio-modal-backdrop"><div className="studio-modal" role="dialog" aria-modal="true" aria-label="Import report"><button className="modal-close" aria-label="Close import report" onClick={() => setReportOpen(false)}><X size={18}/></button><span className="eyebrow">MANUSCRIPT IMPORT</span><h2>Review your import.</h2><p>{project.importReport.filename}</p><div className="import-counts"><div><strong>{project.importReport.sourceWords.toLocaleString()}</strong><span>source words</span></div><div><strong>{project.importReport.importedWords.toLocaleString()}</strong><span>imported body words</span></div></div><p className="small-note">Chapter headings are stored separately. Word counts can differ; compare the manuscript with your original.</p>{project.importReport.messages.map((message, i) => <p className="import-message" key={i}>{message}</p>)}<button className="primary" onClick={() => setReportOpen(false)}>Review manuscript <ArrowRight size={14}/></button></div></div>}
+    </>}
+  </div>;
+}
+
+function ManuscriptEditor({ section, onTitle, onDocument }: { section: StudioSection; onTitle: (title: string) => void; onDocument: (document: StudioSection['document']) => void }) {
+  const imageRef = useRef<HTMLInputElement>(null);
+  const editor = useEditor({ extensions: studioExtensions(), content: section.document as JSONContent, immediatelyRender: false, onUpdate: ({ editor }) => onDocument(editor.getJSON()), editorProps: { attributes: { class: 'manuscript-prose', 'aria-label': 'Chapter content' } } });
+  const tool = (label: string, icon: React.ReactNode, action: () => void, active = false) => <button type="button" title={label} aria-label={label} className={active ? 'active' : ''} onClick={action} disabled={!editor}>{icon}</button>;
+  return <><div className="writing-toolbar"><select aria-label="Paragraph style" value={editor?.isActive('heading', { level: 2 }) ? 'heading' : 'body'} onChange={e => e.target.value === 'heading' ? editor?.chain().focus().toggleHeading({ level: 2 }).run() : editor?.chain().focus().setParagraph().run()}><option value="body">Body text</option><option value="heading">Subheading</option></select><span/>{tool('Bold', <Bold size={16}/>, () => { editor?.chain().focus().toggleBold().run(); }, editor?.isActive('bold'))}{tool('Italic', <Italic size={16}/>, () => { editor?.chain().focus().toggleItalic().run(); }, editor?.isActive('italic'))}{tool('Bullet list', <List size={17}/>, () => { editor?.chain().focus().toggleBulletList().run(); }, editor?.isActive('bulletList'))}{tool('Quote', <Quote size={16}/>, () => { editor?.chain().focus().toggleBlockquote().run(); })}{tool('Scene break', <Minus size={17}/>, () => { editor?.chain().focus().setHorizontalRule().run(); })}{tool('Insert table', <Table2 size={16}/>, () => { editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(); })}{tool('Insert image', <ImagePlus size={16}/>, () => imageRef.current?.click())}<span/>{tool('Undo', <Undo2 size={16}/>, () => { editor?.chain().focus().undo().run(); })}{tool('Redo', <Redo2 size={16}/>, () => { editor?.chain().focus().redo().run(); })}<small>Every word has a place.</small></div><input type="file" accept="image/png,image/jpeg" ref={imageRef} hidden onChange={e => { const file = e.target.files?.[0]; if (!file || file.size > 5 * 1024 * 1024) { window.alert('Choose a PNG or JPEG image smaller than 5 MB.'); return; } const reader = new FileReader(); reader.onload = () => { const alt = window.prompt('Describe this image for readers using assistive technology.', '') || ''; editor?.chain().focus().setImage({ src: String(reader.result), alt }).run(); }; reader.readAsDataURL(file); e.target.value = ''; }}/><div className="manuscript-scroll"><article className="manuscript-sheet"><span className="eyebrow">{section.kind === 'chapter' ? 'CHAPTER' : section.kind === 'frontmatter' ? 'FRONT MATTER' : 'BACK MATTER'}</span><input aria-label="Section title" className="section-title-input" value={section.title} onChange={e => onTitle(e.target.value)}/><div className="manuscript-rule"/><EditorContent editor={editor}/><span className="end-mark">✦</span></article></div></>;
+}
+
+function BookPreview({ project, sectionId }: { project: StudioProject; sectionId: string }) {
+  const [format, setFormat] = useState<'print' | 'ebook'>('print');
+  const [html, setHtml] = useState('');
+  const [pages, setPages] = useState<number | null>(null);
+  const [error, setError] = useState(false);
+  const frame = useRef<HTMLIFrameElement>(null);
+  useEffect(() => {
+    if (!pages || format !== 'print') return;
+    const index = project.sections.findIndex(section => section.id === sectionId);
+    const page = frame.current?.contentDocument?.querySelector(`.pagedjs_pages #section-${index}`)?.closest('.pagedjs_page');
+    const preview = frame.current?.contentWindow;
+    if (page && preview) preview.scrollTo(0, page.getBoundingClientRect().top + preview.scrollY - 24);
+  }, [pages, format, sectionId, project.sections]);
+  useEffect(() => { if (format !== 'print') return; setPages(null); setError(false); const timer = setTimeout(() => { setHtml(printHtml(project)); }, 650); return () => clearTimeout(timer); }, [project, format]);
+  useEffect(() => { const listen = (event: MessageEvent) => { if (event.source !== frame.current?.contentWindow) return; if (event.data?.type === 'booksane-layout') setPages(event.data.pages); if (event.data?.type === 'booksane-layout-error') setError(true); }; window.addEventListener('message', listen); return () => window.removeEventListener('message', listen); }, []);
+  return <><div className="preview-toolbar"><div className="preview-format"><button className={format === 'print' ? 'active' : ''} onClick={() => setFormat('print')}><BookOpen size={14}/>Print</button><button className={format === 'ebook' ? 'active' : ''} onClick={() => setFormat('ebook')}><Eye size={14}/>eBook</button></div><span>{format === 'print' ? error ? 'Layout failed. Try a simpler manuscript.' : pages ? `${pages} measured pages · ${project.design.trim === 'a5' ? 'A5' : project.design.trim.replace('x', ' × ') + ' in'}` : 'Composing your pages…' : 'Reflowable reading preview'}</span></div>{format === 'print' ? <iframe ref={frame} title="Measured book preview" className="print-preview-frame" sandbox="allow-scripts allow-same-origin" srcDoc={html}/> : <div className="ebook-preview-scroll"><article className="ebook-sheet"><span className="eyebrow">READING EDITION</span><h1>{project.title}</h1><p className="ebook-author">{project.author}</p>{project.sections.map(s => <section key={s.id}><h2>{s.title}</h2><div dangerouslySetInnerHTML={{ __html: documentHtml(s.document) }}/></section>)}</article></div>}</>;
+}
+
+function ExportDialog({ project, close, notify }: { project: StudioProject; close: () => void; notify: (message: string) => void }) {
+  const [busy, setBusy] = useState('');
+  const [result, setResult] = useState('');
+  const findings = studioChecks(project);
+  async function run(kind: 'pdf' | 'epub' | 'project') {
+    setBusy(kind); setResult('');
+    try {
+      if (kind === 'project') download(new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' }), `${filename(project)}.booksane`);
+      if (kind === 'epub') download(await studioEpub(project), `${filename(project)}.epub`);
+      if (kind === 'pdf') { const response = await fetch('/api/publish/pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(project) }); if (!response.ok) { const error = await response.json(); throw new Error(error.error || 'PDF export failed.'); } download(await response.blob(), `${filename(project)}-interior.pdf`); }
+      setResult(kind === 'project' ? 'Editable project downloaded. Import it to restore your book.' : kind === 'epub' ? 'EPUB downloaded. Run EPUBCheck and review it in your reader before publishing.' : 'PDF downloaded from the measured layout. Review the interior against your printer’s requirements.');
+    } catch (error) { setResult(error instanceof Error ? error.message : 'Export failed. Your manuscript is unchanged.'); }
+    finally { setBusy(''); }
+  }
+  return <div className="studio-modal-backdrop"><div className="studio-modal export-modal" role="dialog" aria-modal="true" aria-label="Export book"><button className="modal-close" aria-label="Close export" onClick={close}><X size={18}/></button><span className="eyebrow">FROM MANUSCRIPT TO PUBLICATION</span><h2>Download your book.</h2><p>{project.title} · Revision {project.revision} · {projectWords(project).toLocaleString()} words</p><div className="export-options"><button disabled={!!busy || findings.some(f => f.level === 'error')} onClick={() => void run('pdf')}><BookOpen size={24}/><strong>Print interior · PDF</strong><span>Measured PDF with page numbers, running heads, and contents.</span><small>{busy === 'pdf' ? 'Composing PDF…' : 'Download PDF'}<ArrowRight size={14}/></small></button><button disabled={!!busy || findings.some(f => f.level === 'error')} onClick={() => void run('epub')}><FileText size={24}/><strong>Reading edition · EPUB</strong><span>Reflowable EPUB with every section and embedded images.</span><small>{busy === 'epub' ? 'Building EPUB…' : 'Download EPUB'}<ArrowRight size={14}/></small></button></div><div className="export-review"><ShieldCheck size={20}/><div><strong>{findings.length ? `${findings.length} items to review` : 'Content checks passed'}</strong><p>{findings.length ? findings.slice(0, 3).map(f => f.message).join(' ') : 'Your title, author, sections, and image descriptions have been checked.'}</p></div></div><p className="small-note">These exports are not certified PDF/X or fully accessibility-validated EPUBs. Keep your original manuscript and review the generated files before publication.</p><button className="backup-button" disabled={!!busy} onClick={() => void run('project')}><FolderOpen size={17}/>Download editable project <Download size={15}/></button>{result && <p className="export-result" role="status">{result}</p>}<button className="report-download" onClick={() => { download(new Blob([JSON.stringify({ project: project.title, revision: project.revision, generatedAt: new Date().toISOString(), contentFindings: findings, validation: { epubcheck: 'not run', accessibility: 'not reviewed', pdfx: 'not certified', printerApproval: 'not checked' } }, null, 2)], { type: 'application/json' }), `${filename(project)}-review.json`); notify('Export review downloaded.'); }}>Download this revision’s review record</button></div></div>;
+}
