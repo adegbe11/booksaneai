@@ -97,13 +97,25 @@ export default function DesignStudio({ project, change, selectedId, select }: { 
 }
 
 function CoverCard({ project, pages, change }: { project: StudioProject; pages: number | null; change: (fn: (p: StudioProject) => StudioProject) => void }) {
+  const [binding, setBinding] = useState<'paperback' | 'hardcover'>('paperback');
   const paper = project.publishing?.paper || 'white';
-  if (!pages) return <div className="cover-card"><span className="builder-title">Paperback cover</span><p className="cover-wait">Measuring pages…</p></div>;
-  const c = coverSize(project.design.trim, pages, paper);
+  const head = <div className="cover-head"><span className="builder-title">Cover size</span><div className="ds-seg small" role="group" aria-label="Binding">{(['paperback', 'hardcover'] as const).map(b => <button key={b} aria-pressed={binding === b} className={binding === b ? 'on' : ''} onClick={() => setBinding(b)}>{b === 'paperback' ? 'Paperback' : 'Hardcover'}</button>)}</div></div>;
+  if (!pages) return <div className="cover-card">{head}<p className="cover-wait">Measuring pages…</p></div>;
   const inch = (n: number) => `${n.toFixed(3)} in`;
   const mm = (n: number) => `${(n * 25.4).toFixed(1)} mm`;
-  return <div className="cover-card">
-    <span className="builder-title">Paperback cover size</span>
+  if (binding === 'hardcover') {
+    const count = pages + (pages % 2);
+    return <div className="cover-card">{head}
+      <dl>
+        <div><dt>Pages</dt><dd>{count}</dd></div>
+        <div><dt>Wrap</dt><dd>0.51 in<small>15 mm past each edge</small></dd></div>
+        <div><dt>Spine hinge</dt><dd>0.4 in<small>10 mm each side</small></dd></div>
+      </dl>
+      <a className="cover-link" href="https://kdp.amazon.com/en_US/cover-calculator" target="_blank" rel="noopener noreferrer">Exact hardcover size on Amazon KDP</a>
+    </div>;
+  }
+  const c = coverSize(project.design.trim, pages, paper);
+  return <div className="cover-card">{head}
     <label>Paper<select aria-label="Paper" value={paper} onChange={e => change(p => ({ ...p, publishing: { ...(p.publishing || {}), paper: e.target.value as 'white' | 'cream' } }))}><option value="white">White</option><option value="cream">Cream</option></select></label>
     <dl>
       <div><dt>Pages</dt><dd>{c.pages}</dd></div>

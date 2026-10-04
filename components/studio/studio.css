@@ -148,3 +148,4 @@
 .cover-card dd small{font-weight:400;color:var(--studio-muted);font-size:11px}
 .cover-note,.cover-wait{margin:0;font-size:11px;color:var(--studio-muted)}
 @media(max-width:650px){.workspace-header .find-trigger{display:none}}
+.cover-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.cover-link{font-size:12px;font-weight:600;color:var(--studio-green)}

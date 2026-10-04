@@ -205,5 +205,7 @@ test('new tools: parts, find and replace, publishing details, device preview and
   await expect(ebook.getByText('Also by Alex Morgan')).toBeVisible();
   await expect(ebook.getByText('teapot', { exact: false })).toBeVisible();
   await expect(page.getByText(/Spine width/)).toBeVisible({ timeout: 60000 });
+  await page.getByRole('button', { name: 'Hardcover' }).click();
+  await expect(page.getByText('Spine hinge')).toBeVisible();
   await page.screenshot({ path: 'artifacts/new-tools.png', fullPage: true });
 });
