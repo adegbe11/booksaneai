@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { StudioProject } from '@/lib/studio/model';
-import { ebookHtml, printHtml } from '@/lib/studio/publication';
+import { ebookHtml, printHtml, type ReaderTheme } from '@/lib/studio/publication';
 import { TRIMS } from '@/lib/studio/themes';
 
 export function trimLabel(project: StudioProject) { return TRIMS[project.design.trim].label; }
@@ -34,6 +34,14 @@ export function MeasuredPages({ project, sectionId, hidden = false, onPages }: {
   return <iframe ref={frame} title="Measured book preview" className={hidden ? 'measure-frame' : 'print-preview-frame'} aria-hidden={hidden || undefined} tabIndex={hidden ? -1 : undefined} sandbox="allow-scripts allow-same-origin" srcDoc={html}/>;
 }
 
-export function EbookPreview({ project }: { project: StudioProject }) {
-  return <div className="ebook-preview-scroll"><div className="ebook-device"><iframe title="eBook preview" className="ebook-frame" sandbox="" srcDoc={ebookHtml(project)}/></div></div>;
+export type Device = 'kindle' | 'iphone' | 'ipad';
+export const DEVICES: Record<Device, { label: string; w: number; h: number; radius: number; bezel: number }> = {
+  kindle: { label: 'Kindle', w: 360, h: 480, radius: 14, bezel: 22 },
+  iphone: { label: 'iPhone', w: 300, h: 650, radius: 46, bezel: 11 },
+  ipad: { label: 'iPad', w: 460, h: 620, radius: 28, bezel: 16 },
+};
+
+export function EbookPreview({ project, device = 'iphone', reader = 'white', size = 17 }: { project: StudioProject; device?: Device; reader?: ReaderTheme; size?: number }) {
+  const d = DEVICES[device];
+  return <div className="ebook-preview-scroll"><div className={`ebook-device device-${device}`} style={{ width: d.w + d.bezel * 2, height: d.h + d.bezel * 2, padding: d.bezel, borderRadius: d.radius }}><iframe title="eBook preview" className="ebook-frame" style={{ borderRadius: Math.max(4, d.radius - d.bezel) }} sandbox="" srcDoc={ebookHtml(project, reader, device === 'kindle' ? size - 1 : size)}/></div></div>;
 }

@@ -1,6 +1,10 @@
 import { OVERRIDE_VALUES, THEME_IDS, TRIM_IDS, type DesignOverrides, type TrimId } from './themes';
 
-export type SectionKind = 'chapter' | 'frontmatter' | 'backmatter';
+export type SectionKind = 'chapter' | 'frontmatter' | 'backmatter' | 'part';
+export const STORES = ['amazon', 'apple', 'kobo', 'google', 'bn'] as const;
+export type Store = typeof STORES[number];
+export interface Publishing { series?: string; seriesNumber?: number; alsoBy?: string[]; storeLinks?: Partial<Record<Store | 'website', string>>; newsletterText?: string; newsletterUrl?: string; paper?: 'white' | 'cream' }
+export interface Goals { target?: number; daily?: number; history?: Record<string, number> }
 export interface DocumentNode { type?: string; text?: string; attrs?: Record<string, unknown>; marks?: { type: string; attrs?: Record<string, unknown> }[]; content?: DocumentNode[] }
 export interface StudioSection { id: string; kind: SectionKind; title: string; document: DocumentNode }
 export interface StudioProject {
@@ -9,6 +13,8 @@ export interface StudioProject {
   design: { theme: string; trim: TrimId; fontSize: number; lineHeight: number; recto: boolean } & DesignOverrides;
   sections: StudioSection[];
   importReport?: { filename: string; messages: string[]; sourceWords: number; importedWords: number };
+  publishing?: Publishing;
+  goals?: Goals;
 }
 
 export function emptyDocument(): DocumentNode { return { type: 'doc', content: [{ type: 'paragraph' }] }; }
@@ -36,7 +42,8 @@ export function words(text: string): number { return (text.match(/\S+/gu) || [])
 export function projectWords(project: StudioProject): number { return project.sections.reduce((n, section) => n + words(documentText(section.document)), 0); }
 export function escape(value: string): string { return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
-export function documentHtml(node: DocumentNode): string {
+/** `notes` collects footnotes for ebooks (linked at the end of the section); without it, print keeps them inline for the page engine. */
+export function documentHtml(node: DocumentNode, notes?: string[]): string {
   if (node.type === 'text') {
     let text = escape(node.text || '');
     for (const mark of node.marks || []) {
@@ -46,7 +53,15 @@ export function documentHtml(node: DocumentNode): string {
     }
     return text;
   }
-  const content = (node.content || []).map(documentHtml).join('');
+  if (node.type === 'footnote') {
+    const note = escape(String(node.attrs?.note || ''));
+    if (!notes) return `<span class="footnote">${note}</span>`;
+    notes.push(note);
+    const n = notes.length;
+    return `<a class="noteref" epub:type="noteref" role="doc-noteref" href="#fn-${n}" id="fnref-${n}">${n}</a>`;
+  }
+  const content = (node.content || []).map(child => documentHtml(child, notes)).join('');
+  if (node.type === 'callout') { const tone = ['note', 'tip', 'warning', 'quote'].includes(String(node.attrs?.tone)) ? String(node.attrs?.tone) : 'note'; return `<aside class="callout callout-${tone}">${content}</aside>`; }
   const tags: Record<string, string> = { paragraph: 'p', heading: `h${Math.max(2, Math.min(3, Number(node.attrs?.level) || 2))}`, blockquote: 'blockquote', bulletList: 'ul', orderedList: 'ol', listItem: 'li', table: 'table', tableRow: 'tr', tableCell: 'td', tableHeader: 'th', codeBlock: 'pre' };
   if (node.type === 'hardBreak') return '<br/>';
   if (node.type === 'horizontalRule') return '<p class="scene-break" role="separator"><span>* * *</span></p>';
@@ -64,19 +79,30 @@ export function readProject(value: unknown): StudioProject {
   if (p.schemaVersion !== 2 || typeof p.id !== 'string' || typeof p.title !== 'string' || typeof p.author !== 'string' || typeof p.subtitle !== 'string' || !/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(p.language) || !Number.isFinite(p.revision) || !Number.isFinite(p.createdAt) || !Number.isFinite(p.updatedAt) || !Array.isArray(p.sections) || p.sections.length > 1000) throw new Error('Unsupported or damaged Booksane project.');
   if (!p.design || !THEME_IDS.includes(p.design.theme) || !TRIM_IDS.includes(p.design.trim) || !(p.design.fontSize >= 8 && p.design.fontSize <= 24) || !(p.design.lineHeight >= 1.1 && p.design.lineHeight <= 2) || typeof p.design.recto !== 'boolean') throw new Error('Invalid book design settings.');
   for (const [key, allowed] of Object.entries(OVERRIDE_VALUES)) { const v = (p.design as unknown as Record<string, unknown>)[key]; if (v !== undefined && !allowed.includes(v as string | boolean)) throw new Error('Invalid book design settings.'); }
-  const supported = new Set(['doc', 'text', 'paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'listItem', 'table', 'tableRow', 'tableCell', 'tableHeader', 'hardBreak', 'horizontalRule', 'image', 'codeBlock']);
+  const supported = new Set(['doc', 'text', 'paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'listItem', 'table', 'tableRow', 'tableCell', 'tableHeader', 'hardBreak', 'horizontalRule', 'image', 'codeBlock', 'callout', 'footnote']);
   let nodes = 0;
   const validate = (node: DocumentNode, depth: number) => {
     if (!node || !supported.has(node.type || '') || depth > 30 || ++nodes > 500000 || (node.text !== undefined && typeof node.text !== 'string') || (node.content !== undefined && !Array.isArray(node.content)) || (node.marks !== undefined && !Array.isArray(node.marks))) throw new Error('Unsupported document content.');
     for (const mark of node.marks || []) if (!mark || !['bold', 'italic', 'underline', 'strike', 'code', 'link'].includes(mark.type)) throw new Error('Unsupported text formatting.');
+    if (node.type === 'footnote' && (typeof node.attrs?.note !== 'string' || node.attrs.note.length > 4000)) throw new Error('Invalid footnote.');
+    if (node.type === 'callout' && !['note', 'tip', 'warning', 'quote', undefined].includes(node.attrs?.tone as string | undefined)) throw new Error('Invalid callout.');
     if (node.type === 'image' && (typeof node.attrs?.src !== 'string' || !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(node.attrs.src))) throw new Error('Images must be embedded PNG or JPEG files.');
     (node.content || []).forEach(child => validate(child, depth + 1));
   };
   const ids = new Set<string>();
   for (const section of p.sections) {
-    if (!section || typeof section.id !== 'string' || ids.has(section.id) || typeof section.title !== 'string' || !['chapter', 'frontmatter', 'backmatter'].includes(section.kind) || section.document?.type !== 'doc') throw new Error('Invalid book section.');
+    if (!section || typeof section.id !== 'string' || ids.has(section.id) || typeof section.title !== 'string' || !['chapter', 'frontmatter', 'backmatter', 'part'].includes(section.kind) || section.document?.type !== 'doc') throw new Error('Invalid book section.');
     ids.add(section.id); validate(section.document, 0);
   }
+  const pub = p.publishing;
+  if (pub !== undefined) {
+    const str = (v: unknown, max = 500) => v === undefined || (typeof v === 'string' && v.length <= max);
+    // Links are stored as typed; only complete http(s) links ever reach the book (see safeUrl).
+    const url = (v: unknown) => v === undefined || (typeof v === 'string' && v.length <= 2000);
+    if (typeof pub !== 'object' || !str(pub.series) || !(pub.seriesNumber === undefined || (Number.isInteger(pub.seriesNumber) && pub.seriesNumber >= 1 && pub.seriesNumber <= 999)) || !(pub.alsoBy === undefined || (Array.isArray(pub.alsoBy) && pub.alsoBy.length <= 100 && pub.alsoBy.every(t => typeof t === 'string' && t.length <= 300))) || !str(pub.newsletterText, 1000) || !url(pub.newsletterUrl) || !(pub.paper === undefined || ['white', 'cream'].includes(pub.paper)) || !(pub.storeLinks === undefined || (typeof pub.storeLinks === 'object' && Object.entries(pub.storeLinks).every(([k, v]) => [...STORES, 'website'].includes(k) && url(v))))) throw new Error('Invalid publishing details.');
+  }
+  const g = p.goals;
+  if (g !== undefined && (typeof g !== 'object' || !(g.target === undefined || (Number.isInteger(g.target) && g.target >= 0 && g.target <= 10000000)) || !(g.daily === undefined || (Number.isInteger(g.daily) && g.daily >= 0 && g.daily <= 1000000)) || !(g.history === undefined || (typeof g.history === 'object' && Object.entries(g.history).every(([d, n]) => /^\d{4}-\d{2}-\d{2}$/.test(d) && Number.isFinite(n)))))) throw new Error('Invalid writing goals.');
   return p;
 }
 
@@ -91,8 +117,41 @@ export function studioChecks(project: StudioProject): StudioFinding[] {
     (node.content || []).forEach(child => inspect(child, sectionId));
   };
   for (const s of project.sections) {
-    if (!documentText(s.document).trim() && !documentHtml(s.document).includes('<img')) findings.push({ level: 'warning', message: `“${s.title}” is empty.`, sectionId: s.id });
+    if (s.kind !== 'part' && !documentText(s.document).trim() && !documentHtml(s.document).includes('<img')) findings.push({ level: 'warning', message: `“${s.title}” is empty.`, sectionId: s.id });
     inspect(s.document, s.id);
   }
   return findings;
 }
+
+function escapeRegExp(v: string) { return v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+/** Counts and replaces text across every section. Matches inside one formatted run of text (a word split across bold and plain text won't match). */
+export function findInProject(project: StudioProject, find: string, matchCase = false): number {
+  if (!find) return 0;
+  const re = new RegExp(escapeRegExp(find), matchCase ? 'g' : 'gi');
+  let n = 0;
+  const walk = (node: DocumentNode) => { if (node.type === 'text') n += (node.text?.match(re) || []).length; (node.content || []).forEach(walk); };
+  project.sections.forEach(s => { walk(s.document); n += (s.title.match(re) || []).length; });
+  return n;
+}
+export function replaceInProject(project: StudioProject, find: string, replacement: string, matchCase = false): StudioProject {
+  if (!find) return project;
+  const re = new RegExp(escapeRegExp(find), matchCase ? 'g' : 'gi');
+  const walk = (node: DocumentNode): DocumentNode => node.type === 'text' ? { ...node, text: (node.text || '').replace(re, () => replacement) } : node.content ? { ...node, content: node.content.map(walk) } : node;
+  return { ...project, sections: project.sections.map(s => ({ ...s, title: s.title.replace(re, () => replacement), document: walk(s.document) })) };
+}
+
+/** Several books in one: each becomes a part, followed by its chapters and back matter. */
+export function boxSet(books: StudioProject[], title: string): StudioProject {
+  const p = newProject();
+  p.title = title || 'Box Set';
+  p.author = books[0]?.author || '';
+  p.design = { ...(books[0]?.design || p.design) };
+  p.sections = books.flatMap(b => [
+    { ...newSection('part', b.title), document: emptyDocument() },
+    ...b.sections.filter(s => s.kind !== 'frontmatter' && s.kind !== 'part').map(s => ({ ...s, id: crypto.randomUUID(), kind: s.kind === 'backmatter' ? 'chapter' as const : s.kind })),
+  ]);
+  return p;
+}
+
+/** A link the book may print or link to: complete http(s) addresses only. */
+export function safeUrl(v: string | undefined): string | undefined { return v && /^https?:\/\/[^\s<>"']+$/i.test(v.trim()) ? v.trim() : undefined; }

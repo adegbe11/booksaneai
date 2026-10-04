@@ -254,3 +254,17 @@ export function combinationCount(): number {
   const n = (o: object) => Object.keys(o).length;
   return THEMES.length * FONT_IDS.length * FONT_IDS.length * n(CHOICES.chapterLabel) * n(CHOICES.headingAlign) * n(CHOICES.headingCase) * n(CHOICES.dropCap) * n(CHOICES.firstLine) * n(CHOICES.sceneBreak) * n(CHOICES.ornament) * n(CHOICES.paragraph);
 }
+
+/** Amazon KDP paperback paper thickness, inches per page (KDP cover calculator values). */
+export const PAPER_THICKNESS = { white: 0.002252, cream: 0.0025 } as const;
+export function trimInches(trim: TrimId): [number, number] {
+  const [w, h] = TRIMS[trim].size.split(' ').map(v => (v.endsWith('mm') ? parseFloat(v) / 25.4 : parseFloat(v)));
+  return [w, h];
+}
+/** Full wraparound paperback cover with 0.125 in bleed on every edge. Page counts round up to an even number. */
+export function coverSize(trim: TrimId, pages: number, paper: 'white' | 'cream' = 'white') {
+  const [w, h] = trimInches(trim);
+  const count = Math.max(24, pages + (pages % 2));
+  const spine = count * PAPER_THICKNESS[paper];
+  return { pages: count, spine, width: 0.125 + w + spine + w + 0.125, height: h + 0.25, spineText: count >= 79 };
+}

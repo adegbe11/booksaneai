@@ -180,3 +180,30 @@ test('import onboarding is keyboard-dismissable and clearly explains file prepar
   await page.getByRole('button', { name: 'Review manuscript' }).click();
   await expect(page.getByLabel('Chapter content')).toContainText('Words brought through the guided import flow.');
 });
+
+test('new tools: parts, find and replace, publishing details, device preview and cover size', async ({ page }) => {
+  await page.goto('/editor');
+  await page.getByRole('button', { name: /Open sample book/ }).click();
+  await expect(page.getByLabel('Chapter content')).toBeVisible();
+  await page.getByRole('button', { name: 'Add part' }).click();
+  await expect(page.locator('.section-item.is-part')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Find and replace' }).click();
+  await page.getByLabel('Find text').fill('kettle');
+  await expect(page.getByText('1 match in this book')).toBeVisible();
+  await page.getByLabel('Replace with').fill('teapot');
+  await page.getByRole('button', { name: 'Replace all' }).click();
+  await expect(page.getByText('Replaced 1 match.')).toBeVisible();
+  await page.getByText('Series and other books').click();
+  await page.getByLabel('Also by').fill('The Quiet Year\nSmall Rooms');
+  await expect(page.getByRole('button', { name: 'Callout box' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Footnote' })).toBeVisible();
+  await page.getByRole('button', { name: 'Design', exact: true }).click();
+  await page.getByRole('tab', { name: 'eBook' }).click();
+  await page.getByRole('button', { name: 'Kindle' }).click();
+  await page.getByRole('button', { name: 'Sepia' }).click();
+  const ebook = page.frameLocator('iframe[title="eBook preview"]');
+  await expect(ebook.getByText('Also by Alex Morgan')).toBeVisible();
+  await expect(ebook.getByText('teapot', { exact: false })).toBeVisible();
+  await expect(page.getByText(/Spine width/)).toBeVisible({ timeout: 60000 });
+  await page.screenshot({ path: 'artifacts/new-tools.png', fullPage: true });
+});

@@ -4,9 +4,10 @@ import { useMemo, useState } from 'react';
 import { BookOpen, ChevronLeft, ChevronRight, Columns2, Smartphone } from 'lucide-react';
 import { documentHtml, escape, type StudioProject } from '@/lib/studio/model';
 import { publicationCss } from '@/lib/studio/publication';
-import { TRIMS, chapterLabel, chapterOpening, fontStack, resolveDesign } from '@/lib/studio/themes';
+import { TRIMS, chapterLabel, chapterOpening, coverSize, fontStack, resolveDesign } from '@/lib/studio/themes';
 import { DesignControls, ThemeGallery, TrimSelect } from './DesignControls';
-import { EbookPreview, MeasuredPages, trimLabel } from './BookPreview';
+import { DEVICES, EbookPreview, MeasuredPages, trimLabel, type Device } from './BookPreview';
+import type { ReaderTheme } from '@/lib/studio/publication';
 
 type View = 'spread' | 'pages' | 'ebook';
 
@@ -47,6 +48,9 @@ export default function DesignStudio({ project, change, selectedId, select }: { 
   const [view, setView] = useState<View>('spread');
   const [pages, setPages] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
+  const [device, setDevice] = useState<Device>('iphone');
+  const [reader, setReader] = useState<ReaderTheme>('white');
+  const [textSize, setTextSize] = useState(17);
   const chapters = project.sections.filter(s => s.kind === 'chapter');
   const current = project.sections.find(s => s.id === selectedId)?.kind === 'chapter' ? selectedId : chapters[0]?.id || project.sections[0]?.id || '';
   const at = chapters.findIndex(s => s.id === current);
@@ -67,9 +71,14 @@ export default function DesignStudio({ project, change, selectedId, select }: { 
         </div>
         <span className="ds-status">{status}</span>
       </div>
+      {view === 'ebook' && <div className="ds-subbar">
+        <div className="ds-seg small" role="group" aria-label="Device">{(Object.keys(DEVICES) as Device[]).map(k => <button key={k} aria-pressed={device === k} className={device === k ? 'on' : ''} onClick={() => setDevice(k)}>{DEVICES[k].label}</button>)}</div>
+        <div className="ds-seg small" role="group" aria-label="Reading colours">{(['white', 'sepia', 'dark'] as ReaderTheme[]).map(k => <button key={k} aria-pressed={reader === k} className={reader === k ? 'on' : ''} onClick={() => setReader(k)}>{k[0].toUpperCase() + k.slice(1)}</button>)}</div>
+        <div className="ds-seg small" role="group" aria-label="Text size"><button aria-label="Smaller text" onClick={() => setTextSize(n => Math.max(13, n - 2))}>A−</button><button aria-label="Larger text" onClick={() => setTextSize(n => Math.min(27, n + 2))}>A+</button></div>
+      </div>}
       <div className="ds-canvas">
         {view === 'spread' && <iframe title="Book spread" className="spread-frame" sandbox="allow-scripts allow-same-origin" srcDoc={html}/>}
-        {view === 'ebook' && <EbookPreview project={project}/>}
+        {view === 'ebook' && <EbookPreview project={project} device={device} reader={reader} size={textSize}/>}
         <MeasuredPages project={project} sectionId={current} hidden={view !== 'pages'} onPages={(n, e) => { setPages(n); setFailed(e); }}/>
       </div>
       {view === 'spread' && chapters.length > 0 && <div className="ds-pager">
@@ -82,6 +91,25 @@ export default function DesignStudio({ project, change, selectedId, select }: { 
       <div className="ds-head"><span className="eyebrow">CUSTOMISE</span><h2>Make it yours.</h2></div>
       <TrimSelect design={project.design} change={setDesign}/>
       <DesignControls design={project.design} change={setDesign}/>
+      <CoverCard project={project} pages={pages} change={change}/>
     </aside>
+  </div>;
+}
+
+function CoverCard({ project, pages, change }: { project: StudioProject; pages: number | null; change: (fn: (p: StudioProject) => StudioProject) => void }) {
+  const paper = project.publishing?.paper || 'white';
+  if (!pages) return <div className="cover-card"><span className="builder-title">Paperback cover</span><p className="cover-wait">Measuring pages…</p></div>;
+  const c = coverSize(project.design.trim, pages, paper);
+  const inch = (n: number) => `${n.toFixed(3)} in`;
+  const mm = (n: number) => `${(n * 25.4).toFixed(1)} mm`;
+  return <div className="cover-card">
+    <span className="builder-title">Paperback cover size</span>
+    <label>Paper<select aria-label="Paper" value={paper} onChange={e => change(p => ({ ...p, publishing: { ...(p.publishing || {}), paper: e.target.value as 'white' | 'cream' } }))}><option value="white">White</option><option value="cream">Cream</option></select></label>
+    <dl>
+      <div><dt>Pages</dt><dd>{c.pages}</dd></div>
+      <div><dt>Spine width</dt><dd>{inch(c.spine)}<small>{mm(c.spine)}</small></dd></div>
+      <div><dt>Full cover</dt><dd>{c.width.toFixed(3)} × {c.height.toFixed(3)} in<small>{mm(c.width)} × {mm(c.height)}</small></dd></div>
+    </dl>
+    <p className="cover-note">{c.spineText ? 'Spine text fits.' : 'Spine text needs 79+ pages.'} Amazon KDP paperback · 0.125 in bleed</p>
   </div>;
 }

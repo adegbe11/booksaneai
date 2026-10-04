@@ -89,3 +89,62 @@
 @media(max-width:1180px){.design-studio{grid-template-columns:280px minmax(0,1fr) 270px}}
 @media(max-width:900px){.workspace-body.design{height:auto}.design-studio{grid-template-columns:1fr;height:auto}.ds-stage{height:70vh;order:-1}.ds-themes,.ds-custom{border:0;overflow:visible}}
 .ebook-device{display:flex;height:100%;max-height:760px}.ebook-frame{flex:1;width:100%;border:0;border-radius:26px;background:#fbfaf6}
+/* ── Navigator: parts, drag and drop, goal ── */
+.group-adds{display:inline-flex;gap:2px}
+.section-item{position:relative}
+.section-item .grip{opacity:0;margin-left:-6px;color:#9aa69e;cursor:grab;flex-shrink:0;transition:opacity .15s}
+.section-item:hover .grip{opacity:1}
+.section-item.dragging{opacity:.45}
+.section-item.drop-over{box-shadow:inset 0 2px 0 var(--studio-green)}
+.section-item.is-part{font-weight:600;letter-spacing:.01em}
+.section-item.is-part span{font-variant:small-caps}
+.goal{display:flex;flex-direction:column;gap:5px;padding:8px 0 4px}
+.goal-row{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#4b5a52;font-weight:600}
+.goal-bar{height:5px;border-radius:9px;background:#e4e9df;overflow:hidden}
+.goal-bar i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,#3d7a62,var(--studio-green));transition:width .4s}
+.goal small{font-size:11px;color:var(--studio-muted)}
+/* ── Publishing panel ── */
+.publishing-panel{display:flex;flex-direction:column;gap:2px;margin-top:20px;border-top:1px solid var(--studio-line);padding-top:10px}
+.pub-group{border-bottom:1px solid var(--studio-line);padding:6px 0}
+.pub-group summary{cursor:pointer;list-style:none;padding:8px 0;font:600 12.5px var(--font-inter),sans-serif;color:var(--studio-ink);display:flex;justify-content:space-between}
+.pub-group summary::after{content:'+';color:var(--studio-muted)}.pub-group[open] summary::after{content:'–'}
+.pub-group summary::-webkit-details-marker{display:none}
+.pub-group label{display:flex;flex-direction:column;gap:5px;margin:8px 0;font-size:11.5px;font-weight:600;color:#4b5a52}
+.pub-group input,.pub-group textarea{border:1px solid #dfe4da;border-radius:9px;padding:8px 10px;font:13px var(--font-inter),sans-serif;color:var(--studio-ink);background:#fff;resize:vertical}
+.pub-group input.invalid{border-color:#c4554a}
+/* ── Editor: callouts and footnotes ── */
+.manuscript-prose .callout{margin:1.2em 0;padding:.9em 1.1em;border:1px solid #cdd6cc;border-radius:10px;background:#f6f9f4}
+.manuscript-prose .callout p{margin:.3em 0}
+.manuscript-prose sup.footnote-ref{display:inline-grid;place-items:center;min-width:1.25em;height:1.25em;margin:0 1px;border-radius:5px;background:#e3ece4;color:var(--studio-green);font:700 .6em var(--font-inter),sans-serif;vertical-align:super;cursor:pointer}
+.manuscript-prose sup.footnote-ref.ProseMirror-selectednode{outline:2px solid var(--studio-green)}
+/* ── Find, box set, export target ── */
+.find-modal,.boxset-modal{display:flex;flex-direction:column;gap:12px;max-width:440px}
+.find-modal label,.boxset-modal label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:600;color:#4b5a52}
+.find-modal input:not([type=checkbox]),.boxset-modal input{height:40px;border:1px solid #dfe4da;border-radius:10px;padding:0 12px;font:14px var(--font-inter),sans-serif}
+.find-modal .check-label{flex-direction:row;align-items:center;gap:8px}
+.find-count{margin:0;color:var(--studio-muted);font-size:13px}
+.boxset-list{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto}
+.boxset-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:11px;border:1px solid var(--studio-line);background:#fff;text-align:left;cursor:pointer}
+.boxset-item.on{border-color:var(--studio-green);background:#f3f8f3}
+.boxset-item span:last-child{display:flex;flex-direction:column;font-weight:600}
+.boxset-item small{font-weight:400;color:var(--studio-muted)}
+.boxset-num{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;flex-shrink:0;border:1px solid #cfd8cd;font-size:12px;font-weight:700;color:#fff}
+.boxset-item.on .boxset-num{background:var(--studio-green);border-color:var(--studio-green)}
+.boxset-trigger{margin-left:auto;margin-right:10px}
+.epub-target{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:14px 0 4px;font-size:12.5px;font-weight:600;color:#4b5a52}
+.epub-target select{height:36px;border-radius:9px;border:1px solid #dfe4da;padding:0 10px;font:13px var(--font-inter),sans-serif}
+/* ── Device preview and cover card ── */
+.ds-subbar{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;padding:0 22px 6px}
+.ds-seg.small button{padding:6px 12px;font-size:11.5px}
+.ebook-device{background:#151a17;box-shadow:0 24px 60px #1c2b2440;max-height:none;overflow:hidden;transition:width .3s,height .3s,border-radius .3s}
+.ebook-device.device-kindle{background:#22252a}
+.ebook-device .ebook-frame{width:100%;height:100%}
+.ds-canvas .ebook-preview-scroll{align-items:center;overflow:auto}
+.cover-card{display:flex;flex-direction:column;gap:10px;margin-top:6px;padding:14px;border-radius:14px;background:#f2f6f0;border:1px solid #e0e8dc}
+.cover-card dl{margin:0;display:flex;flex-direction:column;gap:8px}
+.cover-card dl div{display:flex;justify-content:space-between;gap:10px}
+.cover-card dt{font-size:12px;color:var(--studio-muted)}
+.cover-card dd{margin:0;text-align:right;font-weight:600;font-size:12.5px;display:flex;flex-direction:column}
+.cover-card dd small{font-weight:400;color:var(--studio-muted);font-size:11px}
+.cover-note,.cover-wait{margin:0;font-size:11px;color:var(--studio-muted)}
+@media(max-width:650px){.workspace-header .find-trigger{display:none}}
