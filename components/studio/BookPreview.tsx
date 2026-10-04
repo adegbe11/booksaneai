@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { documentHtml, type StudioProject } from '@/lib/studio/model';
-import { printHtml } from '@/lib/studio/publication';
+import type { StudioProject } from '@/lib/studio/model';
+import { ebookHtml, printHtml } from '@/lib/studio/publication';
 import { TRIMS } from '@/lib/studio/themes';
 
 export function trimLabel(project: StudioProject) { return TRIMS[project.design.trim].label; }
@@ -35,5 +35,5 @@ export function MeasuredPages({ project, sectionId, hidden = false, onPages }: {
 }
 
 export function EbookPreview({ project }: { project: StudioProject }) {
-  return <div className="ebook-preview-scroll"><div className="ebook-device"><article className="ebook-sheet"><span className="eyebrow">READING EDITION</span><h1>{project.title}</h1><p className="ebook-author">{project.author}</p>{project.sections.map(s => <section key={s.id}><h2>{s.title}</h2><div dangerouslySetInnerHTML={{ __html: documentHtml(s.document) }}/></section>)}</article></div></div>;
+  return <div className="ebook-preview-scroll"><div className="ebook-device"><iframe title="eBook preview" className="ebook-frame" sandbox="" srcDoc={ebookHtml(project)}/></div></div>;
 }

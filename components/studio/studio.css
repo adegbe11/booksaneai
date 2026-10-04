@@ -88,3 +88,4 @@
 .ds-custom .check-label{flex-direction:row;align-items:center;gap:8px;font-weight:500}
 @media(max-width:1180px){.design-studio{grid-template-columns:280px minmax(0,1fr) 270px}}
 @media(max-width:900px){.workspace-body.design{height:auto}.design-studio{grid-template-columns:1fr;height:auto}.ds-stage{height:70vh;order:-1}.ds-themes,.ds-custom{border:0;overflow:visible}}
+.ebook-device{display:flex;height:100%;max-height:760px}.ebook-frame{flex:1;width:100%;border:0;border-radius:26px;background:#fbfaf6}

@@ -78,3 +78,14 @@ export async function studioEpub(project: StudioProject): Promise<Blob> {
   zip.file('EPUB/package.opf', `<?xml version="1.0" encoding="UTF-8"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="uid">${uid}</dc:identifier><dc:title>${escape(project.title)}</dc:title><dc:creator>${escape(project.author)}</dc:creator><dc:language>${escape(project.language)}</dc:language><meta property="dcterms:modified">${new Date().toISOString().replace(/\.\d+Z$/, 'Z')}</meta></metadata><manifest><item id="title" href="title.xhtml" media-type="application/xhtml+xml"/><item id="nav" href="nav.xhtml" properties="nav" media-type="application/xhtml+xml"/><item id="css" href="book.css" media-type="text/css"/>${project.sections.map((_, i) => `<item id="s${i}" href="section-${i}.xhtml" media-type="application/xhtml+xml"/>`).join('')}${assets.join('')}</manifest><spine><itemref idref="title"/><itemref idref="nav"/>${project.sections.map((_, i) => `<itemref idref="s${i}"/>`).join('')}</spine></package>`);
   return zip.generateAsync({ type: 'blob', mimeType: 'application/epub+zip', compression: 'DEFLATE' });
 }
+
+/** The reading edition exactly as the EPUB styles it, for the on-screen eBook preview. */
+export function ebookHtml(project: StudioProject): string {
+  const d = resolveDesign(project.design);
+  let chapterNo = 0;
+  const body = project.sections.map(s => {
+    const label = s.kind === 'chapter' ? chapterLabel(d.label, ++chapterNo) : '';
+    return `<section class="${s.kind}"><header class="section-head">${label ? `<p class="section-label">${label}</p>` : ''}<h1>${escape(s.title)}</h1></header>${s.kind === 'chapter' ? chapterOpening(documentHtml(s.document), d) : documentHtml(s.document)}</section>`;
+  }).join('');
+  return `<!doctype html><html lang="${escape(project.language)}"><head><meta charset="utf-8"><style>${EPUB_BASE_CSS}${themeCss(d, true)}body{margin:0;padding:28px 24px 40px;font-family:Georgia,serif;font-size:17px;color:#222;background:#fbfaf6}.titlepage{text-align:center;margin:30px 0 40px}.titlepage h1{font-size:1.8em;font-weight:400}section{margin-bottom:2.5em}</style></head><body><section class="titlepage"><h1>${escape(project.title)}</h1><p>${escape(project.author)}</p></section>${body}</body></html>`;
+}
