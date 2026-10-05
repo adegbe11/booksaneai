@@ -6,7 +6,7 @@ import type { JSONContent } from '@tiptap/core';
 import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, BookOpen, Check, ChevronRight, Download, FileText, FolderOpen, LayoutTemplate, Loader2, Plus, Search, Settings2, ShieldCheck, Upload, X, StickyNote, Superscript, Replace, Bold, Italic, List, Quote, Undo2, Redo2, Table2, Minus, Copy, Trash2, History, Eye, PenLine, ImagePlus } from 'lucide-react';
 import { studioExtensions } from '@/lib/studio/extensions';
 import { documentHtml, documentText, newProject, newSection, projectWords, studioChecks, words, type StudioProject, type StudioSection } from '@/lib/studio/model';
-import { listProjects, saveProject, projectSnapshots, type ProjectSnapshot } from '@/lib/studio/store';
+import { keepStorage, listProjects, saveProject, projectSnapshots, type ProjectSnapshot } from '@/lib/studio/store';
 import { importFile, migrateRecent } from '@/lib/studio/import';
 import { STORE_NAMES, studioEpub, type EpubTarget } from '@/lib/studio/publication';
 import type { RecentBook } from '@/types';
@@ -61,6 +61,7 @@ export default function Studio() {
     let alive = true;
     (async () => {
       try {
+        keepStorage();
         const all = await listProjects();
         const legacy = JSON.parse(localStorage.getItem('booksane_recent') || '[]') as RecentBook[];
         if (Array.isArray(legacy)) for (const book of legacy) {
@@ -138,7 +139,7 @@ export default function Studio() {
       </div>}
       {helpOpen && <WorkflowHelp mode={mode} sample={sampleActive} close={() => setHelpOpen(false)} write={() => { setMode('write'); setGuideVisible(true); }} design={() => { setMode('design'); setPanel('details'); setGuideVisible(true); }} exportBook={() => setExportOpen(true)}/>}
       {exportOpen && <ExportDialog project={project} close={() => setExportOpen(false)} notify={setNotice}/>}
-      {reportOpen && project.importReport && <div className="studio-modal-backdrop"><div className="studio-modal" role="dialog" aria-modal="true" aria-label="Import report"><button className="modal-close" aria-label="Close import report" onClick={() => setReportOpen(false)}><X size={18}/></button><span className="eyebrow">MANUSCRIPT IMPORT</span><h2>Review your import.</h2><p>{project.importReport.filename}</p><div className="import-counts"><div><strong>{project.importReport.sourceWords.toLocaleString()}</strong><span>source words</span></div><div><strong>{project.importReport.importedWords.toLocaleString()}</strong><span>imported body words</span></div></div><p className="small-note">Chapter headings are stored separately. Word counts can differ; compare the manuscript with your original.</p>{project.importReport.messages.map((message, i) => <p className="import-message" key={i}>{message}</p>)}<button className="primary" onClick={() => setReportOpen(false)}>Review manuscript <ArrowRight size={14}/></button></div></div>}
+      {reportOpen && project.importReport && <div className="studio-modal-backdrop"><div className="studio-modal" role="dialog" aria-modal="true" aria-label="Import report"><button className="modal-close" aria-label="Close import report" onClick={() => setReportOpen(false)}><X size={18}/></button><Booksy pose="read" size={92} className="dialog-buddy"/><span className="eyebrow">IMPORTED</span><h2>Review your import.</h2><p>{project.importReport.filename}</p><div className="import-counts"><div><strong>{project.importReport.sourceWords.toLocaleString()}</strong><span>source words</span></div><div><strong>{project.importReport.importedWords.toLocaleString()}</strong><span>imported body words</span></div></div>{project.importReport.messages.map((message, i) => <p className="import-message" key={i}>{message}</p>)}<button className="primary" onClick={() => setReportOpen(false)}>Review manuscript <ArrowRight size={14}/></button></div></div>}
     </>}
   </div>;
 }

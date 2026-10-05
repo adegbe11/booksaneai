@@ -60,8 +60,17 @@ test('IndexedDB commits documents and checkpoints atomically and rejects older r
   await saveProject(p, true);
   assert.ok((await listProjects()).some(book => book.id === p.id && book.revision === 5));
   assert.equal((await projectSnapshots(p.id)).length, 1);
-  await assert.rejects(() => saveProject({ ...p, revision: 4, title: 'Stale' }), /newer revision/);
+  await assert.rejects(() => saveProject({ ...p, revision: 4, title: 'Stale' }), /newer version/);
   assert.equal((await listProjects()).find(book => book.id === p.id)!.title, p.title);
   for (let i = 6; i < 18; i++) await saveProject({ ...p, revision: i }, true);
   assert.equal((await projectSnapshots(p.id)).length, 10);
+});
+
+test('saving recovers after the browser closes the storage connection', async () => {
+  const { _closeConnectionForTests } = await import('../lib/studio/store');
+  const p = newProject(true); p.revision = 1;
+  await saveProject(p);
+  await _closeConnectionForTests();
+  await saveProject({ ...p, revision: 2, title: 'After reconnect' });
+  assert.equal((await listProjects()).find(book => book.id === p.id)!.title, 'After reconnect');
 });

@@ -55,8 +55,7 @@ export async function importFile(file: File): Promise<StudioProject> {
   const messages = converted.messages.map(m => m.message);
   const unsupportedImages = Array.from(source.querySelectorAll('img')).filter(img => !/^data:image\/(png|jpeg);base64,/.test(img.src));
   if (unsupportedImages.length) messages.push(`${unsupportedImages.length} images use an unsupported format. Convert them to PNG or JPEG before importing.`);
-  if (!source.querySelector('h1')) messages.push('No Heading 1 chapter boundaries found. Imported as one section; split it into chapters in your source document or add sections here.');
-  messages.push('DOCX headings, emphasis, lists, tables, and embedded PNG/JPEG images are mapped to book content. Review notes, numbering, text boxes, and tracked changes against your original.');
+  if (!source.querySelector('h1')) messages.push('No chapter headings found, so it came in as one section. Add chapters here, or use Heading 1 in Word.');
   project.importReport = { filename: file.name, messages, sourceWords: words(raw.value), importedWords: project.sections.reduce((sum, s) => sum + words(documentText(s.document)), 0) };
   readProject(project);
   return project;
