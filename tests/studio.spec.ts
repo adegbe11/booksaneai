@@ -107,9 +107,27 @@ test('DOCX import retains headings, emphasis, and tables, with a review report',
   await expect(page.getByRole('button', { name: /Open sample book/ })).toBeVisible();
   await page.locator('input[type=file]').first().setInputFiles({ name: 'Structured.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', buffer: await zip.generateAsync({ type: 'nodebuffer' }) });
   await expect(page.getByRole('dialog', { name: 'Import report' })).toBeVisible();
-  await page.getByRole('button', { name: 'Review manuscript' }).click();
+  await page.getByRole('button', { name: 'See my book' }).click();
   await expect(page.locator('.manuscript-prose strong')).toContainText('Important words preserved');
   await expect(page.locator('.manuscript-prose table')).toContainText('Cell content');
+});
+
+test('a messy manuscript is cleaned on import and each fix can be undone', async ({ page }) => {
+  await page.goto('/editor');
+  await expect(page.getByRole('button', { name: /Open sample book/ })).toBeVisible();
+  const messy = 'My Book\n\nCHAPTER ONE: THE DEPARTURE\n\nShe said "it\'s late" and left--quickly...\n\n\n\n***\n\nThe  road  was long.\n\nCHAPTER 2\n\nThey came home.';
+  await page.locator('input[type=file]').first().setInputFiles({ name: 'Messy.txt', mimeType: 'text/plain', buffer: Buffer.from(messy) });
+  const dialog = page.getByRole('dialog', { name: 'Import report' });
+  await expect(dialog).toContainText(/I cleaned up \d+ things/);
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: 'artifacts/tidy-dialog.png' });
+  const quotes = dialog.getByRole('switch', { name: /quote/i });
+  await quotes.click();
+  await expect(quotes).toHaveAttribute('aria-checked', 'false');
+  await quotes.click();
+  await dialog.getByRole('button', { name: 'See my book' }).click();
+  await expect(page.getByText('The Departure', { exact: true }).first()).toBeVisible();
+  await expect(page.getByLabel('Chapter content')).toContainText('She said “it’s late” and left—quickly…');
 });
 
 test('mobile library and workspace remain usable without page-level horizontal overflow', async ({ page }) => {
@@ -129,7 +147,7 @@ test('long manuscript composes across pages and responds to trim changes', async
   const paragraph = 'Attention gives ordinary moments their shape. We notice the light at the window, the rhythm of a familiar street, and the stories carried by people around us. A book preserves those discoveries for another reader, who brings an entirely different life to the page.';
   const manuscript = 'Chapter One\n\n' + Array(220).fill(paragraph).join('\n\n') + '\n\nChapter Two\n\n' + Array(220).fill(paragraph).join('\n\n');
   await page.locator('input[type=file]').first().setInputFiles({ name: 'Long manuscript.txt', mimeType: 'text/plain', buffer: Buffer.from(manuscript) });
-  await page.getByRole('button', { name: 'Review manuscript' }).click();
+  await page.getByRole('button', { name: 'See my book' }).click();
   await page.getByRole('button', { name: 'Design', exact: true }).click();
   await expect(page.getByText(/measured pages/)).toBeVisible({ timeout: 90000 });
   const frame = page.frameLocator('iframe[title="Measured book preview"]');
@@ -187,7 +205,7 @@ test('import onboarding is keyboard-dismissable and clearly explains file prepar
   await page.getByRole('button', { name: /Drop a file here, or choose a file/ }).click();
   await (await fileChooser).setFiles({ name: 'First manuscript.txt', mimeType: 'text/plain', buffer: Buffer.from('Chapter One\n\nWords brought through the guided import flow.') });
   await expect(page.getByRole('dialog', { name: 'Import report' })).toBeVisible();
-  await page.getByRole('button', { name: 'Review manuscript' }).click();
+  await page.getByRole('button', { name: 'See my book' }).click();
   await expect(page.getByLabel('Chapter content')).toContainText('Words brought through the guided import flow.');
 });
 

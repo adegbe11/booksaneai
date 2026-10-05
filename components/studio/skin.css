@@ -148,3 +148,22 @@
 .booksane-studio .import-counts{background:#fff;border:2px solid var(--ink);border-radius:16px}
 .booksane-studio .import-counts strong,.booksane-studio .import-counts b,.booksane-studio .import-counts span:first-child{font-family:SiteSans,sans-serif!important;font-weight:800;letter-spacing:-.03em;color:var(--ink)!important}
 .booksane-studio .import-message{color:var(--muted)}
+
+/* Tidy up dialog */
+.booksane-studio .tidy-modal{max-width:520px}
+.booksane-studio .tidy-list{list-style:none;margin:18px 0 6px;padding:0;border:2px solid var(--ink);border-radius:16px;background:#fff;overflow:hidden}
+.booksane-studio .tidy-list li{display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1.5px dashed var(--line);color:var(--muted);transition:background .2s}
+.booksane-studio .tidy-list li:first-child{border-top:0}
+.booksane-studio .tidy-list li.on{color:var(--ink);animation:tidy-in .35s both}
+.booksane-studio .tidy-list li.on:nth-child(2){animation-delay:.05s}.booksane-studio .tidy-list li.on:nth-child(3){animation-delay:.1s}.booksane-studio .tidy-list li.on:nth-child(4){animation-delay:.15s}.booksane-studio .tidy-list li.on:nth-child(5){animation-delay:.2s}.booksane-studio .tidy-list li.on:nth-child(n+6){animation-delay:.25s}
+@keyframes tidy-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.booksane-studio .tidy-tick{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;border:2px solid var(--line);color:#fff}
+.booksane-studio .tidy-list li.on .tidy-tick{background:var(--green);border-color:var(--green)}
+.booksane-studio .tidy-label{flex:1;font:600 14px SiteSans,sans-serif}
+.booksane-studio .tidy-switch{flex:none;position:relative;width:42px;height:24px;border-radius:999px;border:2px solid var(--ink);background:var(--paper-2);cursor:pointer;padding:0;transition:background .2s}
+.booksane-studio .tidy-switch i{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--ink);transition:transform .2s}
+.booksane-studio .tidy-switch[aria-checked=true]{background:var(--green)}
+.booksane-studio .tidy-switch[aria-checked=true] i{transform:translateX(18px);background:#fff}
+.booksane-studio .tidy-actions{display:flex;align-items:center;gap:14px;margin-top:18px;flex-wrap:wrap}
+.booksane-studio .tidy-undo{display:inline-flex;align-items:center;gap:6px;border:0;background:none;color:var(--red);font:700 13.5px SiteSans,sans-serif;cursor:pointer;text-decoration:underline wavy;text-underline-offset:4px}
+@media (prefers-reduced-motion:reduce){.booksane-studio .tidy-list li.on{animation:none}}

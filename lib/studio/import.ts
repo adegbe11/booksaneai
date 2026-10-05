@@ -25,7 +25,7 @@ export function importPlainText(text: string, filename: string): StudioProject {
   }
   flush();
   if (!project.sections.length) project.sections.push(newSection());
-  project.importReport = { filename, messages: ['Plain text preserves words and line breaks. Review chapter boundaries; title and author are not inferred from body text.'], sourceWords: words(text), importedWords: project.sections.reduce((sum, s) => sum + words(documentText(s.document)), 0) };
+  project.importReport = { filename, messages: [], sourceWords: words(text), importedWords: project.sections.reduce((sum, s) => sum + words(documentText(s.document)), 0) };
   return project;
 }
 

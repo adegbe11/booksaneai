@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import type { JSONContent } from '@tiptap/core';
-import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, BookOpen, Check, ChevronRight, Download, FileText, FolderOpen, LayoutTemplate, Loader2, Plus, Search, Settings2, ShieldCheck, Upload, X, StickyNote, Superscript, Replace, Bold, Italic, List, Quote, Undo2, Redo2, Table2, Minus, Copy, Trash2, History, Eye, PenLine, ImagePlus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, BookOpen, Check, ChevronRight, Download, FileText, FolderOpen, LayoutTemplate, Loader2, Plus, Search, Settings2, ShieldCheck, Upload, X, StickyNote, Superscript, Sparkles, Replace, Bold, Italic, List, Quote, Undo2, Redo2, Table2, Minus, Copy, Trash2, History, Eye, PenLine, ImagePlus } from 'lucide-react';
 import { studioExtensions } from '@/lib/studio/extensions';
 import { documentHtml, documentText, newProject, newSection, projectWords, studioChecks, words, type StudioProject, type StudioSection } from '@/lib/studio/model';
 import { keepStorage, listProjects, saveProject, projectSnapshots, type ProjectSnapshot } from '@/lib/studio/store';
@@ -14,6 +14,8 @@ import { StartingChoices, BookSetup, ImportWelcome, WorkflowHelp, ContextGuide }
 import DesignStudio from './DesignStudio';
 import Navigator, { todayKey } from './Navigator';
 import Library from './Library';
+import TidyDialog from './TidyDialog';
+import { ALL_FIXES, autofix, type FixKind, type FixReport } from '@/lib/studio/autofix';
 import { Booksy } from '@/components/site/Drawings';
 import PublishingPanel from './PublishingPanel';
 import FindReplace from './FindReplace';
@@ -43,6 +45,7 @@ export default function Studio() {
   const [guideVisible, setGuideVisible] = useState(true);
   const [sampleActive, setSampleActive] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [tidy, setTidy] = useState<{ original: StudioProject; on: FixKind[]; report: FixReport; fromImport: boolean } | null>(null);
   const [findOpen, setFindOpen] = useState(false);
   const [boxOpen, setBoxOpen] = useState(false);
   const [snapshots, setSnapshots] = useState<ProjectSnapshot[]>([]);
@@ -97,11 +100,38 @@ export default function Studio() {
     if (project.goals.history?.[key] !== undefined) return;
     change(p => ({ ...p, goals: { ...p.goals, history: { ...Object.fromEntries(Object.entries(p.goals?.history || {}).slice(-60)), [key]: projectWords(p) } } }));
   }, [project, change]);
+  /** Re-runs the clean-up from the untouched original with a different set of fixes. */
+  function retidy(on: FixKind[]) {
+    if (!tidy) return;
+    const { project: next } = autofix(tidy.original, on);
+    change(p => ({ ...next, id: p.id, createdAt: p.createdAt, revision: p.revision }));
+    setSelectedId(next.sections.find(s => s.kind === 'chapter')?.id || next.sections[0]?.id || '');
+    setEditorEpoch(e => e + 1);
+    setTidy({ ...tidy, on });
+  }
+  function startTidy() {
+    if (!project) return;
+    const original = JSON.parse(JSON.stringify(project)) as StudioProject;
+    const result = autofix(original);
+    setTidy({ original, on: [...ALL_FIXES], report: result.report, fromImport: false });
+    change(p => ({ ...result.project, id: p.id, createdAt: p.createdAt, revision: p.revision }));
+    setSelectedId(result.project.sections.find(s => s.kind === 'chapter')?.id || result.project.sections[0]?.id || '');
+    setEditorEpoch(e => e + 1);
+  }
   function open(p: StudioProject) { setProject(p); latest.current = p; setSampleActive(false); try { setGuideVisible(localStorage.getItem(`booksane-guide-hidden-${p.id}`) !== 'yes'); } catch { setGuideVisible(true); } setSelectedId(p.sections.find(s => s.kind === 'chapter')?.id || p.sections[0]?.id || ''); setEditorEpoch(e => e + 1); setMode('write'); setPanel('details'); snapshotTime.current = 0; }
   async function back() { if (project) { try { await saveProject(project, true); } catch { setNotice('Saving failed. Download your project before closing.'); return; } } setProject(null); latest.current = null; }
   async function handleFile(file?: File) {
     if (!file) return; setImporting(true);
-    try { const imported = await importFile(file); open(imported); setImportOpen(false); setReportOpen(!!imported.importReport); }
+    try {
+      const imported = await importFile(file);
+      setImportOpen(false);
+      if (/.(docx|txt)$/i.test(file.name)) {
+        // Clean the manuscript straight away; the author can switch any fix off in the next window.
+        const { project: cleaned, report } = autofix(imported);
+        open(cleaned);
+        setTidy({ original: imported, on: [...ALL_FIXES], report, fromImport: true });
+      } else { open(imported); setReportOpen(!!imported.importReport); }
+    }
     catch (error) { setNotice(error instanceof Error ? error.message : 'Could not import this file.'); }
     finally { setImporting(false); if (fileRef.current) fileRef.current.value = ''; }
   }
@@ -134,11 +164,12 @@ export default function Studio() {
         <aside className="studio-inspector"><div className="inspector-tabs"><button className={panel === 'details' ? 'active' : ''} onClick={() => setPanel('details')}><Settings2 size={15}/>Details</button><button className={panel === 'checks' ? 'active' : ''} onClick={() => setPanel('checks')}><ShieldCheck size={15}/>Review</button><button aria-label="Version history" className={panel === 'history' ? 'active' : ''} onClick={() => void history()}><History size={15}/></button></div>
           {panel === 'details' ? <div className="inspector-content"><div className="book-metadata"><span className="eyebrow">BOOK DETAILS</span><h2>Your book.</h2><p className="inspector-description">Use a working title. You can change these details at any time.</p><label>Book title<input aria-label="Book title" value={project.title} onChange={e => change(p => ({ ...p, title: e.target.value }))}/></label><label>Subtitle<input value={project.subtitle} onChange={e => change(p => ({ ...p, subtitle: e.target.value }))} placeholder="Optional"/></label><label>Author / pen name<input aria-label="Author name" value={project.author} onChange={e => change(p => ({ ...p, author: e.target.value }))} placeholder="Your name"/></label><label>Language<select value={project.language} onChange={e => change(p => ({ ...p, language: e.target.value }))}><option value="en">English</option><option value="fr">French</option><option value="es">Spanish</option><option value="de">German</option><option value="pt">Portuguese</option></select></label>
             </div><PublishingPanel project={project} change={change}/><button className="preview-link" onClick={() => setMode('design')}>Design & preview your book <ArrowRight size={14}/></button>
-          </div> : panel === 'checks' ? <div className="inspector-content"><div className="review-icon"><ShieldCheck size={26}/></div><h2>Review your manuscript.</h2><p className="inspector-description">Content checks for this revision. Export validation is a separate step.</p>{findings.length ? findings.map((f, i) => <button className={`finding ${f.level}`} key={i} onClick={() => { if (f.sectionId) { setSelectedId(f.sectionId); setMode('write'); } }}><span className="finding-dot"/>{f.message}{f.sectionId && <ChevronRight size={14}/>}</button>) : <div className="checks-good"><Check size={18}/>No content issues found.</div>}<div className="review-note"><strong>What we check</strong><p>Title, author, empty sections, and image descriptions. Printer approval and full EPUB accessibility require additional validation.</p></div><button className="secondary" onClick={() => setExportOpen(true)}>Review exports <ArrowRight size={14}/></button></div> : <div className="inspector-content"><span className="eyebrow">VERSION HISTORY</span><h2>Version history.</h2><p className="inspector-description">Up to ten local checkpoints. Restoring creates a new current revision.</p><button className="secondary" onClick={async () => { try { await saveProject(project, true); await history(); setNotice('Checkpoint saved.'); } catch { setNotice('Could not save a checkpoint. Download a project backup.'); } }}><Plus size={14}/>Save checkpoint</button>{snapshots.map(snapshot => <button className="snapshot" key={snapshot.id} onClick={() => { change(() => ({ ...snapshot.project, revision: project.revision, id: project.id })); setSelectedId(snapshot.project.sections[0]?.id || ''); setEditorEpoch(e => e + 1); setNotice('Version restored. Your next save creates a new revision.'); }}><History size={15}/><span>{new Date(snapshot.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}<small>{projectWords(snapshot.project).toLocaleString()} words · Revision {snapshot.project.revision}</small></span><Undo2 size={14}/></button>)}</div>}
+          </div> : panel === 'checks' ? <div className="inspector-content"><div className="review-icon"><ShieldCheck size={26}/></div><h2>Review your manuscript.</h2><p className="inspector-description">Content checks for this revision. Export validation is a separate step.</p>{findings.length ? findings.map((f, i) => <button className={`finding ${f.level}`} key={i} onClick={() => { if (f.sectionId) { setSelectedId(f.sectionId); setMode('write'); } }}><span className="finding-dot"/>{f.message}{f.sectionId && <ChevronRight size={14}/>}</button>) : <div className="checks-good"><Check size={18}/>No content issues found.</div>}<div className="review-note"><strong>What we check</strong><p>Title, author, empty sections, and image descriptions. Printer approval and full EPUB accessibility require additional validation.</p></div><button className="secondary" onClick={startTidy}><Sparkles size={14}/>Tidy up manuscript</button><button className="secondary" onClick={() => setExportOpen(true)}>Review exports <ArrowRight size={14}/></button></div> : <div className="inspector-content"><span className="eyebrow">VERSION HISTORY</span><h2>Version history.</h2><p className="inspector-description">Up to ten local checkpoints. Restoring creates a new current revision.</p><button className="secondary" onClick={async () => { try { await saveProject(project, true); await history(); setNotice('Checkpoint saved.'); } catch { setNotice('Could not save a checkpoint. Download a project backup.'); } }}><Plus size={14}/>Save checkpoint</button>{snapshots.map(snapshot => <button className="snapshot" key={snapshot.id} onClick={() => { change(() => ({ ...snapshot.project, revision: project.revision, id: project.id })); setSelectedId(snapshot.project.sections[0]?.id || ''); setEditorEpoch(e => e + 1); setNotice('Version restored. Your next save creates a new revision.'); }}><History size={15}/><span>{new Date(snapshot.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}<small>{projectWords(snapshot.project).toLocaleString()} words · Revision {snapshot.project.revision}</small></span><Undo2 size={14}/></button>)}</div>}
         </aside>
       </div>}
       {helpOpen && <WorkflowHelp mode={mode} sample={sampleActive} close={() => setHelpOpen(false)} write={() => { setMode('write'); setGuideVisible(true); }} design={() => { setMode('design'); setPanel('details'); setGuideVisible(true); }} exportBook={() => setExportOpen(true)}/>}
       {exportOpen && <ExportDialog project={project} close={() => setExportOpen(false)} notify={setNotice}/>}
+      {tidy && <TidyDialog report={tidy.report} on={tidy.on} importInfo={tidy.fromImport ? project.importReport : undefined} toggle={k => retidy(tidy.on.includes(k) ? tidy.on.filter(x => x !== k) : [...tidy.on, k])} undoAll={() => { retidy([]); setTidy(null); setNotice('Back to your original manuscript.'); }} close={() => setTidy(null)}/>}
       {reportOpen && project.importReport && <div className="studio-modal-backdrop"><div className="studio-modal" role="dialog" aria-modal="true" aria-label="Import report"><button className="modal-close" aria-label="Close import report" onClick={() => setReportOpen(false)}><X size={18}/></button><Booksy pose="read" size={92} className="dialog-buddy"/><span className="eyebrow">IMPORTED</span><h2>Review your import.</h2><p>{project.importReport.filename}</p><div className="import-counts"><div><strong>{project.importReport.sourceWords.toLocaleString()}</strong><span>source words</span></div><div><strong>{project.importReport.importedWords.toLocaleString()}</strong><span>imported body words</span></div></div>{project.importReport.messages.map((message, i) => <p className="import-message" key={i}>{message}</p>)}<button className="primary" onClick={() => setReportOpen(false)}>Review manuscript <ArrowRight size={14}/></button></div></div>}
     </>}
   </div>;
