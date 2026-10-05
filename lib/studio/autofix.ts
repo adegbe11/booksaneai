@@ -225,3 +225,11 @@ export function autofix(original: StudioProject, enabled: Iterable<FixKind> = AL
   }
   return { project: p, report: { counts, theme, total: ALL_FIXES.reduce((n, k) => n + counts[k], 0) } };
 }
+
+/** The book's likely genre for store keywords, with a looser bar than the theme guess. */
+export function bookGenre(project: StudioProject): string | undefined {
+  const sample = project.sections.map(s => documentText(s.document)).join(' ').slice(0, 200000);
+  const total = Math.max(1, words(sample));
+  const [best, second] = GENRES.map(([id, re]) => [id, (sample.match(re) || []).length / total * 1000] as const).sort((a, b) => b[1] - a[1]);
+  return best[1] >= 2 && best[1] >= second[1] * 1.5 ? best[0] : undefined;
+}

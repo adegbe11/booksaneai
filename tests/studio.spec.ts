@@ -310,3 +310,34 @@ test('print proof check reads the real pages and sends you to the fix', async ({
   await dialog.getByRole('button', { name: /Go to Cover/ }).first().click();
   await expect(page.getByRole('img', { name: 'Front cover preview' })).toBeVisible();
 });
+
+test('store page: description with KDP checks, keywords with ideas, free sample', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/editor');
+  await page.getByRole('button', { name: /Open sample book/ }).click();
+  await page.getByRole('button', { name: 'Store', exact: true }).click();
+  await expect(page.getByText('Write your description.')).toBeVisible();
+  await page.getByRole('button', { name: 'Start a draft' }).click();
+  const editor = page.getByLabel('Book description');
+  await editor.click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Twelve short essays about light, streets and the stories we carry. Visit www.example.com');
+  await expect(page.getByText(/Remove links/)).toBeVisible();
+  await page.keyboard.press('Shift+Home');
+  await page.keyboard.type('Twelve short essays about light, streets and the stories we carry.');
+  await expect(page.getByText('Follows KDP’s description rules')).toBeVisible();
+  await page.getByLabel('Keyword 1').fill('bestseller essays');
+  await expect(page.getByText(/doesn’t allow claims/)).toBeVisible();
+  await page.getByLabel('Keyword 1').fill('mindful living essays');
+  await page.screenshot({ path: 'artifacts/store-page.png' });
+  await page.getByLabel('Sample chapters').selectOption('1');
+  const epub = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Sample · EPUB' }).click();
+  const file = await epub;
+  expect(file.suggestedFilename()).toMatch(/-sample\.epub$/);
+  const zip = await JSZip.loadAsync(readFileSync(await file.path()));
+  const nav = await zip.file('EPUB/nav.xhtml')!.async('string');
+  expect(nav).toContain('Keep reading');
+  expect(nav).not.toContain('The shape of an ordinary day');
+});

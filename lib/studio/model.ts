@@ -1,4 +1,5 @@
 import { validCover, type CoverSettings } from './cover';
+import { validListing, type Listing } from './listing';
 import { OVERRIDE_VALUES, THEME_IDS, TRIM_IDS, type DesignOverrides, type TrimId } from './themes';
 
 export type SectionKind = 'chapter' | 'frontmatter' | 'backmatter' | 'part';
@@ -17,6 +18,7 @@ export interface StudioProject {
   publishing?: Publishing;
   goals?: Goals;
   cover?: CoverSettings;
+  listing?: Listing;
 }
 
 export function emptyDocument(): DocumentNode { return { type: 'doc', content: [{ type: 'paragraph' }] }; }
@@ -104,6 +106,7 @@ export function readProject(value: unknown): StudioProject {
     if (typeof pub !== 'object' || !str(pub.series) || !(pub.seriesNumber === undefined || (Number.isInteger(pub.seriesNumber) && pub.seriesNumber >= 1 && pub.seriesNumber <= 999)) || !(pub.alsoBy === undefined || (Array.isArray(pub.alsoBy) && pub.alsoBy.length <= 100 && pub.alsoBy.every(t => typeof t === 'string' && t.length <= 300))) || !str(pub.newsletterText, 1000) || !url(pub.newsletterUrl) || !(pub.paper === undefined || ['white', 'cream'].includes(pub.paper)) || !(pub.storeLinks === undefined || (typeof pub.storeLinks === 'object' && Object.entries(pub.storeLinks).every(([k, v]) => [...STORES, 'website'].includes(k) && url(v))))) throw new Error('Invalid publishing details.');
   }
   if (p.cover !== undefined && !validCover(p.cover)) throw new Error('Invalid cover settings.');
+  if (p.listing !== undefined && !validListing(p.listing)) throw new Error('Invalid store details.');
   const g = p.goals;
   if (g !== undefined && (typeof g !== 'object' || !(g.target === undefined || (Number.isInteger(g.target) && g.target >= 0 && g.target <= 10000000)) || !(g.daily === undefined || (Number.isInteger(g.daily) && g.daily >= 0 && g.daily <= 1000000)) || !(g.history === undefined || (typeof g.history === 'object' && Object.entries(g.history).every(([d, n]) => /^\d{4}-\d{2}-\d{2}$/.test(d) && Number.isFinite(n)))))) throw new Error('Invalid writing goals.');
   return p;
