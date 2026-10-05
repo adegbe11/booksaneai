@@ -8,12 +8,14 @@ import { TRIMS } from '@/lib/studio/themes';
 export function trimLabel(project: StudioProject) { return TRIMS[project.design.trim].label; }
 
 /** The measured book: every page laid out by the same engine that makes the PDF. */
-export function MeasuredPages({ project, sectionId, hidden = false, onPages }: { project: StudioProject; sectionId: string; hidden?: boolean; onPages?: (pages: number | null, error: boolean) => void }) {
+export function MeasuredPages({ project, sectionId, hidden = false, onPages, onLayout }: { project: StudioProject; sectionId: string; hidden?: boolean; onPages?: (pages: number | null, error: boolean) => void; onLayout?: (doc: Document) => void }) {
   const [html, setHtml] = useState('');
   const [pages, setPages] = useState<number | null>(null);
   const frame = useRef<HTMLIFrameElement>(null);
   const report = useRef(onPages);
   report.current = onPages;
+  const layout = useRef(onLayout);
+  layout.current = onLayout;
   useEffect(() => {
     if (!pages || hidden) return;
     const index = project.sections.findIndex(section => section.id === sectionId);
@@ -25,7 +27,7 @@ export function MeasuredPages({ project, sectionId, hidden = false, onPages }: {
   useEffect(() => {
     const listen = (event: MessageEvent) => {
       if (event.source !== frame.current?.contentWindow) return;
-      if (event.data?.type === 'booksane-layout') { setPages(event.data.pages); report.current?.(event.data.pages, false); }
+      if (event.data?.type === 'booksane-layout') { setPages(event.data.pages); report.current?.(event.data.pages, false); const doc = frame.current?.contentDocument; if (doc) layout.current?.(doc); }
       if (event.data?.type === 'booksane-layout-error') report.current?.(null, true);
     };
     window.addEventListener('message', listen);

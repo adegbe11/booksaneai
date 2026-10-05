@@ -59,7 +59,7 @@ export function publicationCss(project: StudioProject): string {
   .title-page{text-align:center;padding-top:1.8in}.title-page p{text-indent:0}.title-page h1{font-family:${fontStack(d.heading)};font-size:32pt;font-weight:400}.subtitle{margin:1em 0 3em}
   .section-head{padding-top:.8in;margin-bottom:2em}.section-label{font-size:9pt;letter-spacing:.16em;text-transform:uppercase;margin-bottom:1.5em}
   .contents h1{font-family:${fontStack(d.heading)}}.contents a{text-decoration:none}.contents li{margin:.7em 0}.contents ol{list-style:none;padding:0}
-  .footnote{float:footnote;font-size:.78em;line-height:1.35;text-indent:0;text-align:left;font-style:normal}
+  .footnote{float:footnote;font-size:${Math.max(7, d.fontSize * 0.78).toFixed(2)}pt;line-height:1.35;text-indent:0;text-align:left;font-style:normal}
   ::footnote-call{font-size:.62em;vertical-align:super;line-height:0}
   ${SHARED_CSS}
   ${themeCss(d)}`;
@@ -68,6 +68,7 @@ export function publicationCss(project: StudioProject): string {
 export function printHtml(project: StudioProject, paginate = true): string {
   readProject(project);
   const size = TRIMS[project.design.trim].size;
+  const gutter = project.design.gutter ?? 0.75;
   const d = resolveDesign(project.design);
   const q = (v: string) => escape(v).replace(/'/g, "\\'");
   const small = `font:8pt ${fontStack(d.body)};color:#777`;
@@ -82,19 +83,21 @@ export function printHtml(project: StudioProject, paginate = true): string {
   const sections = built.map((s, index) => `<section class="book-section ${s.kind}${s.auto ? ' auto' : ''}" id="section-${index}">${s.body}</section>`).join('');
   const contents = built.map((s, i) => `<li${s.kind === 'part' ? ' class="part-entry"' : ''}><a href="#section-${i}">${escape(s.title)}</a></li>`).join('');
   return `<!doctype html><html lang="${escape(project.language)}"><head><meta charset="utf-8"><title>${escape(project.title)}</title><style>${publicationCss(project)}
-  @page{size:${size};margin:.75in .65in .8in .75in;${centre}@footnote{border-top:.5pt solid #999;padding-top:5pt;margin-top:10pt}}
-  @page:left{margin-left:.65in;margin-right:.75in;${heads[0] ? `@top-left{${heads[0]}}` : ''}${outer ? `@bottom-left{${num}}` : ''}}
+  @page{size:${size};margin:.75in .65in .8in ${gutter}in;${centre}@footnote{border-top:.5pt solid #999;padding-top:5pt;margin-top:10pt}}
+  @page:left{margin-left:.65in;margin-right:${gutter}in;${heads[0] ? `@top-left{${heads[0]}}` : ''}${outer ? `@bottom-left{${num}}` : ''}}
   @page:right{${heads[1] ? `@top-right{${heads[1]}}` : ''}${outer ? `@bottom-right{${num}}` : ''}}
   @page title{${none}}
   @page part{${none}}
   @page chapter:first{@top-left{content:none}@top-right{content:none}}
   @page:blank{${none}}
+  @page end{${none}}
+  .end-page{page:end;break-before:page;color:transparent}
   .title-page{page:title}.title-page h1{string-set:book-title content(text)}.chapter .section-head h1{string-set:chapter-title content(text)}.book-section,.contents{break-before:page}.chapter{page:chapter;break-before:${project.design.recto ? 'right' : 'page'}}
   .part{page:part;break-before:right;break-after:page}.part .part-head{padding-top:2.6in;margin:0}
   .contents a{display:block}.contents a::after{float:right;content:target-counter(attr(href),page)}.contents .part-entry{margin-top:1.3em;font-variant:small-caps;letter-spacing:.04em}
   </style><style data-pagedjs-ignore>@media screen{body{background:#e8e8e5}.pagedjs_pages{display:flex;flex-direction:column;align-items:center;gap:24px;padding:30px 0}.pagedjs_page{background:white;box-shadow:0 3px 15px #0001}.pagedjs_page_content{overflow:hidden}}</style>${paginate ? `<script>window.PagedConfig={auto:false};window.booksaneReady=false;</script><script src="/layout/paged.polyfill.js"></script>` : ''}</head><body>
   <section class="title-page"><h1>${escape(project.title)}</h1>${project.subtitle ? `<p class="subtitle">${escape(project.subtitle)}</p>` : ''}<p>${escape(project.author)}</p></section>
-  <section class="contents"><h1>Contents</h1><ol>${contents}</ol></section>${sections}
+  <section class="contents"><h1>Contents</h1><ol>${contents}</ol></section>${sections}${project.design.endBlank ? '<section class="end-page" aria-hidden="true">&#160;</section>' : ''}
   ${paginate ? `<script>const sheet=document.querySelector('style');const css=sheet.textContent;sheet.remove();const base=document.baseURI.startsWith('http')?document.baseURI:'https://booksane.invalid/';window.PagedPolyfill.preview(undefined,[{[base]:css}]).then(flow=>{window.booksaneReady=true;window.booksanePages=flow.total;parent.postMessage({type:'booksane-layout',pages:flow.total},'*')}).catch(error=>{window.booksaneError=String(error);parent.postMessage({type:'booksane-layout-error'},'*')});</script>` : ''}</body></html>`;
 }
 

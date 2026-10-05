@@ -11,7 +11,7 @@ export interface StudioSection { id: string; kind: SectionKind; title: string; d
 export interface StudioProject {
   schemaVersion: 2; id: string; title: string; subtitle: string; author: string; language: string;
   createdAt: number; updatedAt: number; revision: number;
-  design: { theme: string; trim: TrimId; fontSize: number; lineHeight: number; recto: boolean } & DesignOverrides;
+  design: { theme: string; trim: TrimId; fontSize: number; lineHeight: number; recto: boolean; gutter?: number; endBlank?: boolean } & DesignOverrides;
   sections: StudioSection[];
   importReport?: { filename: string; messages: string[]; sourceWords: number; importedWords: number };
   publishing?: Publishing;
@@ -79,7 +79,7 @@ export function readProject(value: unknown): StudioProject {
   if (!value || typeof value !== 'object') throw new Error('Invalid Booksane project.');
   const p = value as StudioProject;
   if (p.schemaVersion !== 2 || typeof p.id !== 'string' || typeof p.title !== 'string' || typeof p.author !== 'string' || typeof p.subtitle !== 'string' || !/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(p.language) || !Number.isFinite(p.revision) || !Number.isFinite(p.createdAt) || !Number.isFinite(p.updatedAt) || !Array.isArray(p.sections) || p.sections.length > 1000) throw new Error('Unsupported or damaged Booksane project.');
-  if (!p.design || !THEME_IDS.includes(p.design.theme) || !TRIM_IDS.includes(p.design.trim) || !(p.design.fontSize >= 8 && p.design.fontSize <= 24) || !(p.design.lineHeight >= 1.1 && p.design.lineHeight <= 2) || typeof p.design.recto !== 'boolean') throw new Error('Invalid book design settings.');
+  if (!p.design || !THEME_IDS.includes(p.design.theme) || !TRIM_IDS.includes(p.design.trim) || !(p.design.fontSize >= 8 && p.design.fontSize <= 24) || !(p.design.lineHeight >= 1.1 && p.design.lineHeight <= 2) || typeof p.design.recto !== 'boolean' || !(p.design.gutter === undefined || (p.design.gutter >= 0.5 && p.design.gutter <= 1.5)) || !(p.design.endBlank === undefined || typeof p.design.endBlank === 'boolean')) throw new Error('Invalid book design settings.');
   for (const [key, allowed] of Object.entries(OVERRIDE_VALUES)) { const v = (p.design as unknown as Record<string, unknown>)[key]; if (v !== undefined && !allowed.includes(v as string | boolean)) throw new Error('Invalid book design settings.'); }
   const supported = new Set(['doc', 'text', 'paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'listItem', 'table', 'tableRow', 'tableCell', 'tableHeader', 'hardBreak', 'horizontalRule', 'image', 'codeBlock', 'callout', 'footnote']);
   let nodes = 0;

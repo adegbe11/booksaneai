@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Box, Check, Download, Grid2x2, ImagePlus, Loader2, Maximize, Trash2, Upload } from 'lucide-react';
+import { AlertCircle, Box, Check, Download, Grid2x2, ImagePlus, Loader2, Maximize, ShieldCheck, Trash2, Upload } from 'lucide-react';
 import type { StudioProject } from '@/lib/studio/model';
 import { FONTS, fontStack } from '@/lib/studio/themes';
 import {
@@ -52,7 +52,7 @@ function StyleThumb({ project, s, style, ready, imgs }: { project: StudioProject
   return <canvas ref={ref} width={180} height={288} aria-hidden="true"/>;
 }
 
-export default function CoverStudio({ project, change }: { project: StudioProject; change: (fn: (p: StudioProject) => StudioProject) => void }) {
+export default function CoverStudio({ project, change, proof }: { project: StudioProject; change: (fn: (p: StudioProject) => StudioProject) => void; proof: () => void }) {
   const s = project.cover || defaultCover();
   const set = (patch: Partial<CoverSettings>) => change(p => ({ ...p, cover: { ...(p.cover || defaultCover()), ...patch } }));
   const [view, setView] = useState<View>('front');
@@ -234,6 +234,7 @@ export default function CoverStudio({ project, change }: { project: StudioProjec
           <button className="secondary" disabled={!!busy || !imgs || !ready} onClick={() => void run('3d')}>3D book</button>
           <button className="secondary" disabled={!!busy || !imgs || !ready} onClick={() => void run('story')}>Story post</button>
         </div>
+        <button className="secondary" onClick={proof}><ShieldCheck size={15}/>Print proof check</button>
         {error && <p className="cover-error" role="alert">{error}</p>}
       </div>
       <input ref={fileRef} type="file" accept="image/png,image/jpeg" hidden aria-label="Upload cover image" onChange={e => { void upload(e.target.files?.[0], 'image'); e.target.value = ''; }}/>

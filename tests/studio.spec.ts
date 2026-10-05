@@ -290,3 +290,23 @@ test('an uploaded cover is checked for each store', async ({ page }) => {
   await expect(page.getByText('Kindle shape (1 : 1.6).')).toBeVisible();
   await expect.poll(() => page.getByRole('img', { name: 'Front cover preview' }).evaluate((c: HTMLCanvasElement) => c.width)).toBe(400);
 });
+
+test('print proof check reads the real pages and sends you to the fix', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/editor');
+  await page.getByRole('button', { name: /Open sample book/ }).click();
+  await page.getByRole('button', { name: /Export book/ }).click();
+  await page.getByRole('button', { name: 'Print proof check' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Print proof check' });
+  await expect(dialog.getByRole('heading', { name: /to fix for Amazon KDP/ })).toBeVisible({ timeout: 90000 });
+  await expect(dialog.getByText('No cover yet')).toBeVisible();
+  await expect(dialog.getByText('Nothing runs into the margins')).toBeVisible();
+  await page.screenshot({ path: 'artifacts/proof-check.png' });
+  await dialog.getByRole('button', { name: 'IngramSpark' }).click();
+  await expect(dialog.getByText('IngramSpark needs an ISBN barcode')).toBeVisible();
+  await dialog.getByRole('button', { name: /Add a blank page/ }).click();
+  await expect(dialog.getByText('No long runs of blank pages')).toBeVisible({ timeout: 90000 });
+  await expect(dialog.getByText('Last page has words on it')).toHaveCount(0);
+  await dialog.getByRole('button', { name: /Go to Cover/ }).first().click();
+  await expect(page.getByRole('img', { name: 'Front cover preview' })).toBeVisible();
+});
