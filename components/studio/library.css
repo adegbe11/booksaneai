@@ -60,7 +60,7 @@
 .lib-empty-note{font-size:30px;opacity:.75}
 .lib-empty{margin-top:30px;color:var(--muted);display:flex;align-items:center;gap:8px}
 
-.lib-steps{list-style:none;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:80px;padding-bottom:0}
+.lib-steps{list-style:none;display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:80px;padding-bottom:0}
 .lib-steps li{display:flex;align-items:center;gap:12px;padding:14px 18px;border-radius:16px;background:#fff;border:2px dashed #cfc6b1}
 .lib-steps span{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--ink);color:#fff;font-weight:800;flex-shrink:0}
 .lib-steps small{color:var(--muted)}
@@ -83,3 +83,6 @@
 .lib-saved{margin-top:16px}
 .lib-hero h1{padding-bottom:16px}
 @media(max-width:560px){.lib-about{display:none}}
+.lib-cover.has-art{padding:0;overflow:hidden;background:#222}
+.lib-cover.has-art img{width:100%;height:100%;object-fit:cover;display:block}
+@media(max-width:1000px) and (min-width:701px){.lib-steps{grid-template-columns:repeat(2,1fr)}}

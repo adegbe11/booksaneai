@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { PDFDocument } from 'pdf-lib';
 import JSZip from 'jszip';
+import { readFileSync } from 'node:fs';
 
 test('author workflow: edit, save, reopen, checkpoint, publish, and restore', async ({ page }) => {
   const errors: string[] = [];
@@ -236,4 +237,56 @@ test('new tools: parts, find and replace, publishing details, device preview and
   await page.getByRole('button', { name: 'Hardcover' }).click();
   await expect(page.getByText('Spine hinge')).toBeVisible();
   await page.screenshot({ path: 'artifacts/new-tools.png', fullPage: true });
+});
+
+test('cover studio: designed front, full wrap with barcode, 3D, and downloads', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/editor');
+  await page.getByRole('button', { name: /Open sample book/ }).click();
+  await page.getByRole('button', { name: 'Cover', exact: true }).click();
+  const preview = page.getByRole('img', { name: 'Front cover preview' });
+  await expect(preview).toBeVisible();
+  await expect.poll(() => preview.evaluate((c: HTMLCanvasElement) => c.width)).toBe(1600);
+  await page.getByRole('button', { name: 'Arch' }).click();
+  await page.getByRole('radio', { name: 'Colours 4' }).click();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: 'artifacts/cover-front.png' });
+  await page.getByLabel('Back cover blurb').fill('A quiet book about noticing. Twelve short essays on light, streets, neighbours and the stories we carry.\n\nFor anyone who has ever stopped to look.');
+  await page.getByLabel('About the author').fill('Alex Morgan writes about everyday life and the things we notice when we slow down.');
+  await page.getByLabel('ISBN').fill('978-0-306-40615-7');
+  await expect(page.getByText('Barcode added')).toBeVisible();
+  await page.getByRole('tab', { name: 'Full cover' }).click();
+  await expect(page.getByText(/pages · spine/)).toBeVisible({ timeout: 90000 });
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: 'artifacts/cover-wrap.png' });
+  const pdf = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Print cover · PDF' }).click();
+  const pdfFile = await pdf;
+  expect(pdfFile.suggestedFilename()).toMatch(/print-cover-kdp\.pdf$/);
+  const coverPdf = await PDFDocument.load(readFileSync(await pdfFile.path()));
+  const size = coverPdf.getPage(0).getSize();
+  expect(size.height).toBeCloseTo(9.25 * 72, 1);
+  expect(size.width).toBeCloseTo((0.25 + 12 + 24 * 0.002252) * 72, 1);
+  const jpg = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'eBook cover · JPG' }).click();
+  expect((await jpg).suggestedFilename()).toMatch(/ebook-cover\.jpg$/);
+  await page.getByRole('tab', { name: '3D' }).click();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: 'artifacts/cover-3d.png' });
+  // the cover reaches the library shelf
+  await page.waitForTimeout(1200);
+  await page.getByRole('button', { name: 'Back to library' }).click();
+  await expect(page.locator('.lib-cover.has-art img').first()).toBeVisible();
+  await page.screenshot({ path: 'artifacts/cover-library.png' });
+});
+
+test('an uploaded cover is checked for each store', async ({ page }) => {
+  await page.goto('/editor');
+  await page.getByRole('button', { name: /Open sample book/ }).click();
+  await page.getByRole('button', { name: 'Cover', exact: true }).click();
+  const png = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 400; c.height = 640; const x = c.getContext('2d')!; x.fillStyle = '#7a3e5d'; x.fillRect(0, 0, 400, 640); return c.toDataURL('image/png').split(',')[1]; });
+  await page.getByLabel('Upload cover image').setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+  await expect(page.getByText('Too small for Kindle. It needs at least 500 px across; yours is 400.')).toBeVisible();
+  await expect(page.getByText('Kindle shape (1 : 1.6).')).toBeVisible();
+  await expect.poll(() => page.getByRole('img', { name: 'Front cover preview' }).evaluate((c: HTMLCanvasElement) => c.width)).toBe(400);
 });

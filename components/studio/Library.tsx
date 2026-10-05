@@ -22,12 +22,12 @@ function Cover({ book, open }: { book: StudioProject; open: () => void }) {
   const colour = hue(book.id);
   const w = projectWords(book);
   return <button className="lib-book" onClick={open} aria-label={`${book.title} by ${book.author || 'you'}, ${w.toLocaleString()} words`}>
-    <span className="lib-cover" style={{ background: colour }}>
+    {book.cover?.thumb ? <span className="lib-cover has-art"><img src={book.cover.thumb} alt=""/><span className="lib-spine"/></span> : <span className="lib-cover" style={{ background: colour }}>
       <span className="lib-spine"/>
       <span className="lib-cover-title" style={{ fontFamily: fontStack(font) }}>{book.title}</span>
       <span className="lib-cover-rule"/>
       <span className="lib-cover-author">{book.author || 'Your name'}</span>
-    </span>
+    </span>}
     <span className="lib-tag"><strong>{book.title}</strong><small>{w.toLocaleString()} words · {when(book.updatedAt)}</small></span>
   </button>;
 }
@@ -80,7 +80,8 @@ export default function Library({ projects, loading, query, setQuery, create, im
     <ol className="wrap lib-steps" aria-label="The publishing workflow">
       <li><span>1</span><strong>Write</strong><small>your words and chapters</small></li>
       <li><span>2</span><strong>Design</strong><small>pick a look you love</small></li>
-      <li><span>3</span><strong>Export</strong><small>print PDF and ebooks</small></li>
+      <li><span>3</span><strong>Cover</strong><small>front, spine and back</small></li>
+      <li><span>4</span><strong>Export</strong><small>print PDF and ebooks</small></li>
     </ol>
     <p className="wrap lib-saved">Books are saved in this browser, on this device. Download a backup from Export.</p>
     <Shelf className="lib-footer-shelf"/>
