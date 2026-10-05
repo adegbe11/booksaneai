@@ -93,3 +93,22 @@ test('bad publishing and goal data is rejected', () => {
   assert.throws(() => readProject({ ...p, goals: { target: -5 } }));
   assert.throws(() => readProject({ ...p, sections: [{ ...p.sections[1], document: { type: 'doc', content: [{ type: 'callout', attrs: { tone: 'shout' }, content: [] }] } }] }));
 });
+
+test('PDF/X-1a conversion produces a compliant structure when Ghostscript is installed', async t => {
+  const { findGhostscript, toPdfX1a } = await import('../lib/server/pdfx');
+  if (!findGhostscript()) { t.skip('Ghostscript not installed'); return; }
+  const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
+  const src = await PDFDocument.create();
+  const font = await src.embedFont(StandardFonts.TimesRoman);
+  const page = src.addPage([432, 648]);
+  page.drawText('Chapter One', { x: 72, y: 560, size: 18, font, color: rgb(0.2, 0.2, 0.2) });
+  page.drawRectangle({ x: 72, y: 100, width: 100, height: 40, color: rgb(0.8, 0.2, 0.2) });
+  const out = Buffer.from(await toPdfX1a(await src.save(), 'Test (Book)'));
+  const text = out.toString('latin1');
+  assert.equal(text.slice(0, 8), '%PDF-1.3');
+  assert.match(text, /GTS_PDFXVersion\s*\(PDF\/X-1a:2001\)/);
+  assert.match(text, /\/GTS_PDFX/);
+  assert.match(text, /\/TrimBox/);
+  const back = await PDFDocument.load(out);
+  assert.equal(back.getPageCount(), 1);
+});
