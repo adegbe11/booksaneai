@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import type { JSONContent } from '@tiptap/core';
-import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, BookOpen, Check, ChevronRight, Download, FileText, FolderOpen, LayoutTemplate, Loader2, Plus, Search, Settings2, ShieldCheck, Upload, X, StickyNote, Superscript, Replace, Library, Bold, Italic, List, Quote, Undo2, Redo2, Table2, Minus, Copy, Trash2, History, Eye, PenLine, ImagePlus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, BookOpen, Check, ChevronRight, Download, FileText, FolderOpen, LayoutTemplate, Loader2, Plus, Search, Settings2, ShieldCheck, Upload, X, StickyNote, Superscript, Replace, Bold, Italic, List, Quote, Undo2, Redo2, Table2, Minus, Copy, Trash2, History, Eye, PenLine, ImagePlus } from 'lucide-react';
 import { studioExtensions } from '@/lib/studio/extensions';
 import { documentHtml, documentText, newProject, newSection, projectWords, studioChecks, words, type StudioProject, type StudioSection } from '@/lib/studio/model';
 import { listProjects, saveProject, projectSnapshots, type ProjectSnapshot } from '@/lib/studio/store';
@@ -13,6 +13,7 @@ import type { RecentBook } from '@/types';
 import { StartingChoices, BookSetup, ImportWelcome, WorkflowHelp, ContextGuide } from './FirstBook';
 import DesignStudio from './DesignStudio';
 import Navigator, { todayKey } from './Navigator';
+import Library from './Library';
 import PublishingPanel from './PublishingPanel';
 import FindReplace from './FindReplace';
 import BoxSetDialog from './BoxSetDialog';
@@ -115,13 +116,7 @@ export default function Studio() {
     {boxOpen && <BoxSetDialog projects={projects} close={() => setBoxOpen(false)} create={book => { setBoxOpen(false); open(book); }}/>}
     {importOpen && <ImportWelcome busy={importing} close={() => setImportOpen(false)} choose={() => fileRef.current?.click()} importFile={file => void handleFile(file)}/>}
     {!project ? <>
-      <header className="library-header"><Logo/><span className="device-note"><span className="status-dot"/>Write → Design → Export</span><a href="/">About Booksane <ArrowRight size={14}/></a></header>
-      <main className="library-main">
-        <StartingChoices returning={projects.length > 0} create={() => setSetupOpen(true)} importBook={() => setImportOpen(true)} sample={() => { open(newProject(true)); setSampleActive(true); }}/>
-        <div className="library-section-heading"><div><h2>Your library <span>{projects.length}</span></h2><p>Saved in this browser on this device.</p></div>{projects.length >= 2 && <button className="secondary boxset-trigger" onClick={() => setBoxOpen(true)}><Library size={15}/>Make a box set</button>}<label className="library-search"><Search size={15}/><input aria-label="Search books" placeholder="Find a book…" value={query} onChange={e => setQuery(e.target.value)}/></label></div>
-        {loading ? <p className="loading-line"><Loader2 size={18} className="spin"/> Opening your library…</p> : <div className="project-grid">{projects.filter(p => `${p.title} ${p.author}`.toLowerCase().includes(query.toLowerCase())).map(p => <button key={p.id} className="project-card" onClick={() => open(p)}><div className={`mini-cover ${p.design.theme}`}><span>BOOKSANE MANUSCRIPT</span><h3>{p.title}</h3><small>{p.author || 'Your name here'}</small></div><div className="project-card-info"><h3>{p.title}</h3><p>{projectWords(p).toLocaleString()} words · {p.sections.length} sections</p><span>Edited {new Date(p.updatedAt).toLocaleDateString()}</span></div><ArrowRight size={17}/></button>)}</div>}
-        <footer className="library-footer"><span><ShieldCheck size={15}/>Saved locally. Portable by design.</span><span>Project files belong to you. Keep a backup for safekeeping.</span></footer>
-      </main>
+      <Library projects={projects} loading={loading} query={query} setQuery={setQuery} open={open} create={() => setSetupOpen(true)} importBook={() => setImportOpen(true)} sample={() => { open(newProject(true)); setSampleActive(true); }} boxSet={() => setBoxOpen(true)}/>
     </> : <>
       <header className="workspace-header"><button className="icon-button" aria-label="Back to library" onClick={() => void back()}><ArrowLeft size={18}/></button><Logo/><span className="header-divider"/><div className="header-book-title">{project.title}<span className="save-label"><span className={`status-dot ${saveState === 'Save failed' ? 'error' : ''}`}/>{saveState}</span></div><div className="workspace-modes"><button className={mode === 'write' ? 'active' : ''} onClick={() => setMode('write')}><PenLine size={14}/>Write</button><button className={mode === 'design' ? 'active' : ''} onClick={() => { setMode('design'); setPanel('details'); }}><LayoutTemplate size={14}/>Design</button></div><button className="icon-button find-trigger" aria-label="Find and replace" title="Find and replace" onClick={() => setFindOpen(true)}><Replace size={17}/></button><button className="workspace-help icon-button" aria-label="Getting started help" title="Getting started help" onClick={() => setHelpOpen(true)}><BookOpen size={17}/></button><button className="primary export-trigger" onClick={() => setExportOpen(true)}><Download size={15}/>Export book</button></header>
       {mode === 'design' ? <div className="workspace-body design"><DesignStudio project={project} change={change} selectedId={selectedId} select={setSelectedId}/></div> : <div className="workspace-body">
