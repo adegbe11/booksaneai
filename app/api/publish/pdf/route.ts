@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
 import { readProject } from '@/lib/studio/model';
 import { printHtml } from '@/lib/studio/publication';
 import { findGhostscript, toPdfX1a } from '@/lib/server/pdfx';
 
 export const runtime = 'nodejs';
+
+/** Serverless hosts (Vercel) use the compact Chromium build; everywhere else uses the browser Puppeteer installed. */
+async function launchBrowser() {
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    const chromium = (await import('@sparticuz/chromium')).default;
+    return puppeteer.launch({ args: chromium.args, executablePath: await chromium.executablePath(), headless: true });
+  }
+  const full = (await import('puppeteer')).default;
+  return puppeteer.launch({ executablePath: await full.executablePath(), headless: true });
+}
 export const maxDuration = 90;
 let rendering = false;
 
@@ -34,7 +44,7 @@ export async function POST(request: NextRequest) {
     const fonts = await Promise.all(fontUrls.map(async url => [url, (await readFile(path.join(process.cwd(), 'public', url))).toString('base64')] as const));
     for (const [url, data] of fonts) html = html.split(`url('${url}')`).join(`url('data:font/woff2;base64,${data}')`);
     html = html.replace('<script src="/layout/paged.polyfill.js"></script>', () => `<script>${script.replace(/<\/script/gi, '<\\/script')}</script>`);
-    browser = await puppeteer.launch({ headless: true });
+    browser = await launchBrowser();
     const page = await browser.newPage();
     await page.setRequestInterception(true);
     page.on('request', req => req.url().startsWith('data:') || req.url().startsWith('about:') ? void req.continue() : void req.abort());
