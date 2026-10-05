@@ -49,13 +49,23 @@ test('author workflow: edit, save, reopen, checkpoint, publish, and restore', as
   await page.getByRole('button', { name: 'Download editable project' }).click();
   const backup = await backupDownload; await backup.saveAs('artifacts/test-book.booksane');
   const pdfDownload = page.waitForEvent('download', { timeout: 90000 });
-  await page.getByRole('button', { name: /Print interior/ }).click();
+  await page.getByRole('button', { name: /^Print interior · PDF Measured/ }).click();
   const pdf = await pdfDownload; await pdf.saveAs('artifacts/test-book.pdf');
   const document = await PDFDocument.load(await fs.readFile('artifacts/test-book.pdf'));
   expect(document.getPageCount()).toBeGreaterThan(3);
   expect(document.getPageCount()).toBe(previewPages);
   expect(document.getPage(0).getWidth()).toBeCloseTo(432, 0);
   expect(document.getPage(0).getHeight()).toBeCloseTo(648, 0);
+  const pdfx = page.getByRole('button', { name: /Print interior · PDF\/X-1a/ });
+  if (await pdfx.count()) {
+    const xDownload = page.waitForEvent('download', { timeout: 120000 });
+    await pdfx.click();
+    const x = await xDownload; await x.saveAs('artifacts/test-book-pdfx.pdf');
+    const bytes = await fs.readFile('artifacts/test-book-pdfx.pdf');
+    expect(bytes.subarray(0, 8).toString()).toBe('%PDF-1.3');
+    expect(bytes.toString('latin1')).toContain('GTS_PDFX');
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(previewPages);
+  }
   await page.getByLabel('Close export').click();
   await page.getByLabel('Back to library').click();
   await page.locator('input[type=file]').first().setInputFiles('artifacts/test-book.booksane');
