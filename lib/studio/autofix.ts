@@ -148,12 +148,12 @@ function splitChapters(sections: StudioSection[], counts: Record<FixKind, number
  * An untitled "Manuscript" section before the first chapter holds whatever came above Chapter 1.
  * A lone short line there is the book's title; anything longer becomes the front pages.
  */
-function leadingPages(p: StudioProject, sections: StudioSection[], counts: Record<FixKind, number>): StudioSection[] {
+function leadingPages(p: StudioProject, sections: StudioSection[], counts: Record<FixKind, number>, on: Set<FixKind>): StudioSection[] {
   const [first, ...rest] = sections;
   if (!first || first.kind !== 'chapter' || !/^manuscript$/i.test(first.title) || !rest.some(s => s.kind === 'chapter')) return sections;
   const lines = (first.document.content || []).map(plain).filter(Boolean);
   counts.matter++;
-  if (lines.length === 1 && lines[0].split(/\s+/).length <= 10) { const t = lines[0].replace(/[.:]$/, ''); p.title = isShouting(t) ? titleCase(t) : t; return rest; }
+  if (lines.length === 1 && lines[0].split(/\s+/).length <= 10) { const node: DocumentNode = { type: 'paragraph', content: [{ type: 'text', text: lines[0].replace(/[.:]$/, '') }] }; fixText(node, on, emptyCounts()); const t = plain(node); p.title = isShouting(t) ? titleCase(t) : t; return rest; }
   return [{ ...first, kind: 'frontmatter', title: 'Front pages' }, ...rest];
 }
 
@@ -211,7 +211,7 @@ export function autofix(original: StudioProject, enabled: Iterable<FixKind> = AL
   const p = clone(original);
   let sections = p.sections;
   if (on.has('chapters')) sections = splitChapters(sections, counts);
-  if (on.has('matter')) sections = leadingPages(p, sections, counts);
+  if (on.has('matter')) sections = leadingPages(p, sections, counts, on);
   sections = sections.map(s => ({ ...s, document: blockFixes(s.document, on, counts) }));
   if (on.has('titles')) sections = sections.map(s => tidyTitle(s, counts));
   if (on.has('matter')) sections = placeMatter(sections, counts);

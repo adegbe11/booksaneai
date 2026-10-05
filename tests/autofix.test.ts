@@ -85,3 +85,10 @@ test('a title line above chapter one becomes the book title', () => {
   assert.equal(project.title, 'The Long Road');
   assert.deepEqual(project.sections.map(s => s.title), ['Chapter One']);
 });
+
+test('the title taken from the first line gets curly quotes too', () => {
+  const p = newProject();
+  const d = (t: string) => ({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: t }] }] });
+  p.sections = [{ ...newSection('chapter', 'Manuscript'), document: d("The Keeper's Daughter") }, { ...newSection('chapter', 'Chapter One'), document: d('Words.') }];
+  assert.equal(autofix(p).project.title, 'The Keeper’s Daughter');
+});

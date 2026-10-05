@@ -76,7 +76,7 @@ export function checkDescription(node?: DocumentNode): ListingCheck[] {
   return out;
 }
 
-const WASTED = /\b(books?|e-?books?|kindle|amazon|novels?)\b/i;
+const WASTED = /\b(books?(?! club)|e-?books?|kindle|amazon|novels?)\b/i;
 const BANNED = /(\bbest ?sell(er|ing)\b|#\s?1\b|\bnumber one\b|\bfree\b|\bon sale\b|\bnew\b|\bkindle unlimited\b|\bkdp select\b|\bprime reading\b|\bbest\b.*\bever\b)/i;
 
 export function checkKeyword(k: string, p: StudioProject): string | null {
