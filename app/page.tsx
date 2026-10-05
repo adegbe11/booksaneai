@@ -40,7 +40,7 @@ export default function HomePage() {
       <div className="wrap hero-grid">
         <div className="hero-copy">
           <h1>Write it. Format it.<br/><span className="hl">Love how it looks.<Squiggle className="hl-line"/></span></h1>
-          <p>Booksane turns your manuscript into a print-ready paperback and a beautiful ebook. Right in your browser, on any computer.</p>
+          <p>Booksane turns your manuscript into a print-ready paperback and a beautiful ebook.</p>
           <div className="hero-cta">
             <Link href="/editor" className="btn btn-green btn-lg">Start your book <ArrowRight size={18}/></Link>
             <span className="hand hand-free">it’s free!<Arrow className="arrow-free" flip/></span>
